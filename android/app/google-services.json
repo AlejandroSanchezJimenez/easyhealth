@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "366950844292",
+    "project_id": "easyhealth-96183",
+    "storage_bucket": "easyhealth-96183.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366950844292:android:5024f04849b7ea204bbfd1",
+        "android_client_info": {
+          "package_name": "es.asanjim.easyhealth"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdF3KmjppKE32gE__yFOSYUBa61uya5ic"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366950844292:android:773bebb24d79c5c34bbfd1",
+        "android_client_info": {
+          "package_name": "es.asanjim.easyhealth"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdF3KmjppKE32gE__yFOSYUBa61uya5ic"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
