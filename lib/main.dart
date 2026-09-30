@@ -6,10 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'core/providers.dart';
+import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // flutterfire configure -> firebase_options.dart
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // La caché de Firestore ya cubre lecturas recientes sin red.
   FirebaseFirestore.instance.settings = const Settings(
@@ -18,8 +22,13 @@ Future<void> main() async {
   );
 
   final prefs = await SharedPreferences.getInstance();
-  runApp(ProviderScope(
-    overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
-    child: const App(),
-  ));
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        sharedPrefsProvider.overrideWithValue(prefs),
+      ],
+      child: const App(),
+    ),
+  );
 }
