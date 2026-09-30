@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 /// - [lockForward]: se puede retroceder, pero nunca adelantar más allá de lo ya visto.
 /// - [onCompleted]: se llama UNA sola vez, cuando el vídeo se ha visto entero.
 /// - [localPath]: si existe el archivo, se reproduce sin red (modo emergencia).
+/// - [forceAspectRatio]: si se indica (ej. 16/9), se usa ese ratio en lugar del del vídeo.
 class AppVideoPlayer extends StatefulWidget {
   const AppVideoPlayer({
     super.key,
@@ -15,6 +16,7 @@ class AppVideoPlayer extends StatefulWidget {
     this.lockForward = false,
     this.autoPlay = false,
     this.onCompleted,
+    this.forceAspectRatio,
   });
 
   final String? url;
@@ -22,6 +24,7 @@ class AppVideoPlayer extends StatefulWidget {
   final bool lockForward;
   final bool autoPlay;
   final void Function(Duration total)? onCompleted;
+  final double? forceAspectRatio;
 
   @override
   State<AppVideoPlayer> createState() => _AppVideoPlayerState();
@@ -102,8 +105,9 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
 
     if (_failed) {
       return const SizedBox(
-          height: 180,
-          child: Center(child: Text('No se pudo cargar el vídeo')));
+        height: 180,
+        child: Center(child: Text('No se pudo cargar el vídeo')),
+      );
     }
 
     return ValueListenableBuilder<VideoPlayerValue>(
@@ -111,12 +115,15 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
       builder: (context, v, _) {
         if (v.hasError) {
           return const SizedBox(
-              height: 180,
-              child: Center(child: Text('No se pudo reproducir el vídeo')));
+            height: 180,
+            child: Center(child: Text('No se pudo reproducir el vídeo')),
+          );
         }
         if (!v.isInitialized) {
           return const SizedBox(
-              height: 180, child: Center(child: CircularProgressIndicator()));
+            height: 180,
+            child: Center(child: CircularProgressIndicator()),
+          );
         }
 
         final total = v.duration.inMilliseconds.toDouble();
@@ -124,72 +131,109 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
             .clamp(0.0, total)
             .toDouble();
 
-        return Column(mainAxisSize: MainAxisSize.min, children: [
-          AspectRatio(
-            aspectRatio: v.aspectRatio == 0 ? 16 / 9 : v.aspectRatio,
-            child: Stack(alignment: Alignment.center, children: [
-              VideoPlayer(_c),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _togglePlay,
-                child: const SizedBox.expand(),
-              ),
-              if (!v.isPlaying)
-                IgnorePointer(
-                  child: Material(
-                    color: Colors.black38,
-                    shape: const CircleBorder(),
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child:
-                          Icon(Icons.play_arrow, color: Colors.white, size: 42),
+        final ratio = widget.forceAspectRatio ??
+            (v.aspectRatio == 0 ? 16 / 9 : v.aspectRatio);
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: ratio,
+              child: Stack(
+                alignment: Alignment.center,
+                fit: StackFit.expand,
+                children: [
+                  // Letterbox si el vídeo no coincide con el ratio forzado
+                  ColoredBox(
+                    color: Colors.black,
+                    child: FittedBox(
+                      fit: BoxFit.contain,
+                      child: SizedBox(
+                        width: v.size.width,
+                        height: v.size.height,
+                        child: VideoPlayer(_c),
+                      ),
                     ),
                   ),
-                ),
-            ]),
-          ),
-          Row(children: [
-            IconButton(
-              tooltip: v.isPlaying ? 'Pausar' : 'Reproducir',
-              onPressed: _togglePlay,
-              icon: Icon(v.isPlaying ? Icons.pause : Icons.play_arrow),
-            ),
-            IconButton(
-              tooltip: 'Retroceder 10 s',
-              onPressed: _back10,
-              icon: const Icon(Icons.replay_10),
-            ),
-            Expanded(
-              child: total <= 0
-                  ? const SizedBox.shrink()
-                  : Slider(
-                      value: pos,
-                      min: 0,
-                      max: total,
-                      onChanged: (x) => setState(() => _drag = _clampSeek(x)),
-                      onChangeEnd: (x) {
-                        final target = _clampSeek(x);
-                        setState(() => _drag = null);
-                        _c.seekTo(Duration(milliseconds: target.round()));
-                      },
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _togglePlay,
+                    child: const SizedBox.expand(),
+                  ),
+                  if (!v.isPlaying)
+                    IgnorePointer(
+                      child: Material(
+                        color: Colors.black38,
+                        shape: const CircleBorder(),
+                        child: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.play_arrow,
+                            color: Colors.white,
+                            size: 42,
+                          ),
+                        ),
+                      ),
                     ),
+                ],
+              ),
             ),
-            Text('${_fmt(v.position)} / ${_fmt(v.duration)}',
-                style: t.bodySmall),
-            const SizedBox(width: 8),
-          ]),
-          if (widget.lockForward)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child:
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.lock_outline, size: 14, color: c.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Text('Puedes retroceder, pero no adelantar.',
-                    style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
-              ]),
+            Row(
+              children: [
+                IconButton(
+                  tooltip: v.isPlaying ? 'Pausar' : 'Reproducir',
+                  onPressed: _togglePlay,
+                  icon: Icon(v.isPlaying ? Icons.pause : Icons.play_arrow),
+                ),
+                IconButton(
+                  tooltip: 'Retroceder 10 s',
+                  onPressed: _back10,
+                  icon: const Icon(Icons.replay_10),
+                ),
+                Expanded(
+                  child: total <= 0
+                      ? const SizedBox.shrink()
+                      : Slider(
+                          value: pos,
+                          min: 0,
+                          max: total,
+                          onChanged: (x) =>
+                              setState(() => _drag = _clampSeek(x)),
+                          onChangeEnd: (x) {
+                            final target = _clampSeek(x);
+                            setState(() => _drag = null);
+                            _c.seekTo(Duration(milliseconds: target.round()));
+                          },
+                        ),
+                ),
+                Text(
+                  '${_fmt(v.position)} / ${_fmt(v.duration)}',
+                  style: t.bodySmall,
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
-        ]);
+            if (widget.lockForward)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      size: 14,
+                      color: c.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Puedes retroceder, pero no adelantar.',
+                      style: t.bodySmall?.copyWith(color: c.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
       },
     );
   }

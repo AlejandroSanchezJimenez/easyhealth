@@ -12,7 +12,7 @@ async function setRole(uid, role) {
 }
 
 // ── Cambia solo estas dos líneas ──
-const UID = 'LW0VHiJW4mTIeP2NfPXsDkOA3293'
+const UID = 'FADVQcbM03ftX6knlj2pJ9Vp1ZH3'
 const ROLE = 'admin' // o 'teacher'
 
 setRole(UID, ROLE)

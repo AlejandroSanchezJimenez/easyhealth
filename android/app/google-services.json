@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:366950844292:android:5024f04849b7ea204bbfd1",
         "android_client_info": {
-          "package_name": "es.asanjim.easyhealth"
+          "package_name": "com.example.easyhealth"
         }
       },
       "oauth_client": [],

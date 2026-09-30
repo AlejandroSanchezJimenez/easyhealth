@@ -323,12 +323,15 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   void _showWorkout(Workout w) {
     final t = Theme.of(context).textTheme;
     final c = Theme.of(context).colorScheme;
+    final warn = context.appColors.warning;
     final byId = {
       for (final e
           in ref.read(exercisesProvider).valueOrNull ?? const <Exercise>[])
         e.id: e
     };
+
     _sheet(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // ── Cabecera de la clase ──
       Text(w.name,
           style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
       const SizedBox(height: 10),
@@ -340,6 +343,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         InfoChip(
             label: difficultyLabel(w.difficulty),
             icon: Icons.bar_chart_rounded),
+        InfoChip(
+            label: '${w.items.length} ejercicios', icon: Icons.fitness_center),
       ]),
       if (w.videoId != null) ...[
         const SizedBox(height: 16),
@@ -350,34 +355,143 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         Text(w.description,
             style: t.bodyLarge?.copyWith(color: c.onSurfaceVariant)),
       ],
-      const SizedBox(height: 20),
+
+      // ── Lista de ejercicios (colapsables) ──
+      const SizedBox(height: 24),
       Text('Ejercicios de la clase',
           style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 10),
-      for (var i = 0; i < w.items.length; i++)
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: CircleAvatar(
-            radius: 16,
-            backgroundColor: c.primaryContainer,
-            foregroundColor: c.onPrimaryContainer,
-            child: Text('${i + 1}',
-                style: const TextStyle(fontWeight: FontWeight.w800)),
-          ),
-          title: Text(byId[w.items[i].exerciseId]?.name ?? 'Ejercicio'),
-          subtitle: Text([
-            if (w.items[i].seconds != null) formatMinutes(w.items[i].seconds!),
-            if (w.items[i].reps != null) '${w.items[i].reps} repeticiones',
-          ].join(' · ')),
-        ),
-      const SizedBox(height: 16),
-      FilledButton.icon(
-        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Descargas y reproductor: siguientes fases.'))),
-        icon: const Icon(Icons.download_rounded),
-        label: const Text('Descargar para usar sin conexión'),
+      const SizedBox(height: 8),
+
+      for (var i = 0; i < w.items.length; i++) ...[
+        Builder(builder: (_) {
+          final item = w.items[i];
+          final e = byId[item.exerciseId];
+
+          if (e == null) {
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                radius: 16,
+                backgroundColor: c.primaryContainer,
+                foregroundColor: c.onPrimaryContainer,
+                child: Text('${i + 1}',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              title: const Text('Ejercicio'),
+              subtitle: Text([
+                if (item.seconds != null) formatMinutes(item.seconds!),
+                if (item.reps != null) '${item.reps} repeticiones',
+              ].join(' · ')),
+            );
+          }
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            clipBehavior: Clip.antiAlias,
+            child: ExpansionTile(
+              tilePadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              leading: CircleAvatar(
+                radius: 16,
+                backgroundColor: c.primaryContainer,
+                foregroundColor: c.onPrimaryContainer,
+                child: Text('${i + 1}',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              title: Text(e.name,
+                  style: t.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+              subtitle: Text([
+                if (item.seconds != null) formatMinutes(item.seconds!),
+                if (item.reps != null) '${item.reps} repeticiones',
+                if (item.seconds == null && e.durationSeconds > 0)
+                  formatMinutes(e.durationSeconds),
+                difficultyLabel(e.difficulty),
+              ].where((s) => s.isNotEmpty).join(' · ')),
+              children: [
+                // Chips de equipo
+                if (e.equipment.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final eq in e.equipment)
+                        InfoChip(label: eq, icon: Icons.sports_gymnastics),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Vídeo
+                if (e.videoId != null) ...[
+                  _VideoSection(videoId: e.videoId!, maxHeight: 200),
+                  const SizedBox(height: 12),
+                ],
+
+                // Descripción
+                if (e.description.isNotEmpty) ...[
+                  Text(e.description,
+                      style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                ],
+
+                _Bullets(title: 'Beneficios', items: e.benefits, top: 8),
+                _Bullets(
+                    title: 'Instrucciones',
+                    items: e.instructions,
+                    numbered: true,
+                    top: 8),
+
+                if (e.precautions.isNotEmpty || e.contraindications.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: warn.withAlpha(30),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: warn.withAlpha(120)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Icon(Icons.warning_amber_rounded,
+                              color: warn, size: 20),
+                          const SizedBox(width: 8),
+                          Text('Seguridad',
+                              style: t.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w800)),
+                        ]),
+                        _Bullets(
+                            title: 'Precauciones',
+                            items: e.precautions,
+                            top: 8),
+                        _Bullets(
+                            title: 'Contraindicaciones',
+                            items: e.contraindications,
+                            top: 8),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
+
+      const SizedBox(height: 24),
+      Text(
+        'Información orientativa. Consulta con tu profesional sanitario antes de empezar.',
+        style: t.bodySmall?.copyWith(color: c.onSurfaceVariant),
       ),
+      // const SizedBox(height: 16),
+      // FilledButton.icon(
+      //   onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+      //       const SnackBar(
+      //           content: Text('Descargas y reproductor: siguientes fases.'))),
+      //   icon: const Icon(Icons.download_rounded),
+      //   label: const Text('Descargar para usar sin conexión'),
+      // ),
     ]));
   }
 
@@ -404,15 +518,29 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     );
   }
 
-  void _sheet(Widget child) => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (_) => SafeArea(
-          child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24), child: child),
-        ),
-      );
+  void _sheet(Widget child) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85, // empieza un poco más bajo
+          minChildSize: 0.45, // se puede arrastrar hasta aquí
+          maxChildSize: 0.95, // nunca más del 95 %
+          expand: false,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController, // ← importante: el mismo controller
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: child,
+            );
+          },
+        );
+      },
+    );
+  }
 }
 
 // ───────────── Widgets de apoyo ─────────────
@@ -564,8 +692,12 @@ class _Empty extends StatelessWidget {
 }
 
 class _VideoSection extends ConsumerWidget {
-  const _VideoSection({required this.videoId});
+  const _VideoSection({
+    required this.videoId,
+    this.maxHeight = 220, // ← nuevo
+  });
   final String videoId;
+  final double maxHeight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -583,11 +715,15 @@ class _VideoSection extends ConsumerWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: ColoredBox(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: AppVideoPlayer(
-          key: ValueKey(video.downloadUrl),
-          url: video.downloadUrl,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: ColoredBox(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: AppVideoPlayer(
+            key: ValueKey(video.downloadUrl),
+            url: video.downloadUrl,
+            forceAspectRatio: 16 / 9, // ← nuevo parámetro
+          ),
         ),
       ),
     );

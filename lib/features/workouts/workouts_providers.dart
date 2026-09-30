@@ -19,12 +19,16 @@ final workoutRemoteProvider = Provider((ref) => ContentRemote<Workout>(
     (w) => w.toMap()));
 
 /// Usuarios: solo publicados.
-final workoutsProvider = StreamProvider<List<Workout>>(
-    (ref) => ref.watch(workoutRemoteProvider).watchPublished());
+final workoutsProvider = StreamProvider<List<Workout>>((ref) {
+  if (ref.watch(uidProvider) == null) return const Stream.empty();
+  return ref.watch(workoutRemoteProvider).watchPublished();
+});
 
 /// Maestros: todos los estados.
-final allWorkoutsProvider = StreamProvider<List<Workout>>(
-    (ref) => ref.watch(workoutRemoteProvider).watchAll());
+final allWorkoutsProvider = StreamProvider<List<Workout>>((ref) {
+  if (ref.watch(uidProvider) == null) return const Stream.empty();
+  return ref.watch(workoutRemoteProvider).watchAll();
+});
 
 /// Entrenamiento del día: UN ejercicio o clase aleatorio de la enfermedad elegida.
 /// Determinista por (usuario, enfermedad, fecha): no cambia al reconstruir la pantalla.

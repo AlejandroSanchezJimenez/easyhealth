@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -33,10 +30,7 @@ class DefaultFirebaseOptions {
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -51,18 +45,34 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBdF3KmjppKE32gE__yFOSYUBa61uya5ic',
-    appId: '1:366950844292:android:5024f04849b7ea204bbfd1',
+    appId: '1:366950844292:android:773bebb24d79c5c34bbfd1',
     messagingSenderId: '366950844292',
     projectId: 'easyhealth-96183',
     storageBucket: 'easyhealth-96183.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyD30C0L2qGadiNL_YPRp2maaTg7laI1R7c',
-    appId: '1:366950844292:ios:26bd673819ec7e744bbfd1',
+    appId: '1:366950844292:ios:e0fa9c175186b64a4bbfd1',
     messagingSenderId: '366950844292',
     projectId: 'easyhealth-96183',
     storageBucket: 'easyhealth-96183.firebasestorage.app',
     iosBundleId: 'es.asanjim.easyhealth',
+  );
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyCRvMEd_aFlFJKD7gZtYhqQUeQ0rwVUUNM',
+    appId: '1:366950844292:web:7a836ceefa047bc84bbfd1',
+    messagingSenderId: '366950844292',
+    projectId: 'easyhealth-96183',
+    authDomain: 'easyhealth-96183.firebaseapp.com',
+    storageBucket: 'easyhealth-96183.firebasestorage.app',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyCRvMEd_aFlFJKD7gZtYhqQUeQ0rwVUUNM',
+    appId: '1:366950844292:web:2eda2ef08c9cbca34bbfd1',
+    messagingSenderId: '366950844292',
+    projectId: 'easyhealth-96183',
+    authDomain: 'easyhealth-96183.firebaseapp.com',
+    storageBucket: 'easyhealth-96183.firebasestorage.app',
   );
 }

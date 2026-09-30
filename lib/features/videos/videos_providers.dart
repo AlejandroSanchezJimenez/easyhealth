@@ -6,6 +6,7 @@ import '../../shared/data/content_repository.dart';
 import 'data/offline_library.dart';
 import 'data/workout_downloader.dart';
 import 'domain/video_meta.dart';
+import '../auth/auth_providers.dart';
 
 final videoRemoteProvider = Provider((ref) => ContentRemote<VideoMeta>(
     ref.watch(firestoreProvider),
@@ -14,12 +15,16 @@ final videoRemoteProvider = Provider((ref) => ContentRemote<VideoMeta>(
     (v) => v.toMap()));
 
 /// Usuarios: solo publicados.
-final videosProvider = StreamProvider<List<VideoMeta>>(
-    (ref) => ref.watch(videoRemoteProvider).watchPublished());
+final videosProvider = StreamProvider<List<VideoMeta>>((ref) {
+  if (ref.watch(uidProvider) == null) return const Stream.empty();
+  return ref.watch(videoRemoteProvider).watchPublished();
+});
 
 /// Maestros: todos los estados.
-final allVideosProvider = StreamProvider<List<VideoMeta>>(
-    (ref) => ref.watch(videoRemoteProvider).watchAll());
+final allVideosProvider = StreamProvider<List<VideoMeta>>((ref) {
+  if (ref.watch(uidProvider) == null) return const Stream.empty();
+  return ref.watch(videoRemoteProvider).watchAll();
+});
 
 final offlineLibraryProvider =
     Provider((ref) => OfflineLibrary(ref.watch(sharedPrefsProvider)));
