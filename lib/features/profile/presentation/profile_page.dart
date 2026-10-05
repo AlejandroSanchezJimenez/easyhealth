@@ -24,7 +24,7 @@ class ProfilePage extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cerrar sesión'),
-        content: const Text('¿Seguro que quieres salir de EasyHealth?'),
+        content: const Text('¿Seguro que quieres salir de Kinea?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -143,7 +143,7 @@ class ProfilePage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Center(
-              child: Text('EasyHealth · v0.1.0',
+              child: Text('Kinea · v0.1.0',
                   style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
             ),
           ]),

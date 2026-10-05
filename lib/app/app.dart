@@ -12,7 +12,7 @@ class App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(syncServiceProvider); // arranca la sincronización al abrir la app
     return MaterialApp.router(
-      title: 'EasyHealth',
+      title: 'Kinea',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,

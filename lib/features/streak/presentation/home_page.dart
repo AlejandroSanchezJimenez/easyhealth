@@ -39,7 +39,7 @@ class HomePage extends ConsumerWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('EASYHEALTH',
+                      Text('KINEA',
                           style: t.labelMedium?.copyWith(
                               color: c.primary,
                               fontWeight: FontWeight.w800,

@@ -1,4 +1,4 @@
-# easyhealth
+# kinea
 
 A new Flutter project.
 

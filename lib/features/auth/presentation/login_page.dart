@@ -135,7 +135,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       size: 46, color: c.onPrimary),
                 ),
                 const SizedBox(height: 18),
-                Text('EasyHealth',
+                Text('Kinea',
                     style: t.headlineLarge?.copyWith(
                         color: c.onPrimaryContainer,
                         fontWeight: FontWeight.w800,
