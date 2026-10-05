@@ -187,6 +187,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                     InfoChip(
                         label: difficultyLabel(e.difficulty),
                         icon: Icons.bar_chart_rounded),
+                    if (e.sets > 0)
+                      InfoChip(label: '${e.sets} series', icon: Icons.repeat),
+                    if (e.reps > 0)
+                      InfoChip(
+                          label: '${e.reps} reps',
+                          icon: Icons.format_list_numbered),
                     if (e.videoId != null)
                       const InfoChip(
                           label: 'Vídeo', icon: Icons.play_circle_outline),
@@ -217,6 +223,10 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         InfoChip(
             label: difficultyLabel(e.difficulty),
             icon: Icons.bar_chart_rounded),
+        if (e.sets > 0)
+          InfoChip(label: '${e.sets} series', icon: Icons.repeat),
+        if (e.reps > 0)
+          InfoChip(label: '${e.reps} reps', icon: Icons.format_list_numbered),
         for (final eq in e.equipment)
           InfoChip(label: eq, icon: Icons.sports_gymnastics),
       ]),

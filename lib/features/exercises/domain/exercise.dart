@@ -9,6 +9,8 @@ class Exercise implements ContentEntity {
     this.instructions = const [],
     this.durationSeconds = 0,
     this.difficulty = 1,
+    this.sets = 0,
+    this.reps = 0,
     this.diseaseIds = const [],
     this.videoId,
     this.thumbnailUrl,
@@ -25,7 +27,7 @@ class Exercise implements ContentEntity {
   final String id;
   final String name, description;
   final List<String> instructions, diseaseIds, equipment, benefits, precautions, contraindications;
-  final int durationSeconds, difficulty;
+  final int durationSeconds, difficulty, sets, reps;
   final String? videoId, thumbnailUrl;
   @override
   final ContentStatus status;
@@ -40,6 +42,8 @@ class Exercise implements ContentEntity {
         instructions: readStrings(m['instructions']),
         durationSeconds: (m['durationSeconds'] as num?)?.toInt() ?? 0,
         difficulty: (m['difficulty'] as num?)?.toInt() ?? 1,
+        sets: (m['sets'] as num?)?.toInt() ?? 0,
+        reps: (m['reps'] as num?)?.toInt() ?? 0,
         diseaseIds: readStrings(m['diseaseIds']),
         videoId: m['videoId'] as String?,
         thumbnailUrl: m['thumbnailUrl'] as String?,
@@ -58,6 +62,8 @@ class Exercise implements ContentEntity {
         'instructions': instructions,
         'durationSeconds': durationSeconds,
         'difficulty': difficulty,
+        'sets': sets,
+        'reps': reps,
         'diseaseIds': diseaseIds,
         'videoId': videoId,
         'thumbnailUrl': thumbnailUrl,

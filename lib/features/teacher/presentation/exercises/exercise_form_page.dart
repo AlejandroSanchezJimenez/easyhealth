@@ -30,11 +30,13 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
   final _instructions = TextEditingController();
   final _duration = TextEditingController(text: '60');
   final _difficulty = TextEditingController(text: '1');
+  final _sets = TextEditingController();
+  final _reps = TextEditingController();
   final _equipment = TextEditingController();
   final _benefits = TextEditingController();
   final _precautions = TextEditingController();
   final _contraindications = TextEditingController();
-  final _thumbnailUrl = TextEditingController();
+  final _diseaseQuery = TextEditingController();
   final Set<String> _diseaseIds = {};
 
   String? _videoId;
@@ -79,11 +81,12 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
       _instructions.text = e.instructions.join('\n');
       _duration.text = '${e.durationSeconds}';
       _difficulty.text = '${e.difficulty}';
+      _sets.text = e.sets > 0 ? '${e.sets}' : '';
+      _reps.text = e.reps > 0 ? '${e.reps}' : '';
       _equipment.text = e.equipment.join('\n');
       _benefits.text = e.benefits.join('\n');
       _precautions.text = e.precautions.join('\n');
       _contraindications.text = e.contraindications.join('\n');
-      _thumbnailUrl.text = e.thumbnailUrl ?? '';
       _diseaseIds
         ..clear()
         ..addAll(e.diseaseIds);
@@ -99,11 +102,13 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
     _instructions.dispose();
     _duration.dispose();
     _difficulty.dispose();
+    _sets.dispose();
+    _reps.dispose();
     _equipment.dispose();
     _benefits.dispose();
     _precautions.dispose();
     _contraindications.dispose();
-    _thumbnailUrl.dispose();
+    _diseaseQuery.dispose();
     super.dispose();
   }
 
@@ -179,10 +184,10 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
               instructions: _lines(_instructions),
               durationSeconds: int.tryParse(_duration.text) ?? 0,
               difficulty: int.tryParse(_difficulty.text) ?? 1,
+              sets: int.tryParse(_sets.text) ?? 0,
+              reps: int.tryParse(_reps.text) ?? 0,
               diseaseIds: _diseaseIds.toList(),
               videoId: videoId,
-              thumbnailUrl:
-                  _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
               equipment: _lines(_equipment),
               benefits: _lines(_benefits),
               precautions: _lines(_precautions),
@@ -258,6 +263,24 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
               ),
             ),
           ]),
+          const SizedBox(height: 14),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _sets,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Series (opcional)'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _reps,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Repeticiones (opcional)'),
+              ),
+            ),
+          ]),
 
           // ── Enfermedades (multi-select) ──
           const SizedBox(height: 24),
@@ -283,22 +306,59 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
                 );
               }
               final usable = list.where((d) => d.status != ContentStatus.archived).toList();
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              final q = _diseaseQuery.text.trim().toLowerCase();
+              final filtered =
+                  q.isEmpty ? usable : usable.where((d) => d.name.toLowerCase().contains(q)).toList();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final d in usable)
-                    FilterChip(
-                      label: Text(d.name),
-                      selected: _diseaseIds.contains(d.id),
-                      onSelected: (sel) => setState(() {
-                        if (sel) {
-                          _diseaseIds.add(d.id);
-                        } else {
-                          _diseaseIds.remove(d.id);
-                        }
-                      }),
+                  TextField(
+                    controller: _diseaseQuery,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar enfermedad...',
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                      suffixIcon: q.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setState(_diseaseQuery.clear),
+                            ),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: SingleChildScrollView(
+                      child: filtered.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                'Ninguna enfermedad coincide con «${_diseaseQuery.text.trim()}».',
+                                style: TextStyle(color: c.onSurfaceVariant),
+                              ),
+                            )
+                          : Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final d in filtered)
+                                  FilterChip(
+                                    label: Text(d.name),
+                                    selected: _diseaseIds.contains(d.id),
+                                    onSelected: (sel) => setState(() {
+                                      if (sel) {
+                                        _diseaseIds.add(d.id);
+                                      } else {
+                                        _diseaseIds.remove(d.id);
+                                      }
+                                    }),
+                                  ),
+                              ],
+                            ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -363,11 +423,6 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
             controller: _contraindications,
             maxLines: 2,
             decoration: const InputDecoration(labelText: 'Contraindicaciones (una por línea)'),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _thumbnailUrl,
-            decoration: const InputDecoration(labelText: 'URL miniatura (opcional)'),
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),

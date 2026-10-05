@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'downloads/download_manager.dart';
 import 'network/connectivity_service.dart';
+import 'notifications/notification_service.dart';
 
 final firebaseAuthProvider = Provider((_) => FirebaseAuth.instance);
 final firestoreProvider = Provider((_) => FirebaseFirestore.instance);
@@ -21,3 +22,6 @@ final onlineProvider = StreamProvider<bool>(
     (ref) => ref.watch(connectivityProvider).onlineChanges);
 
 final downloadManagerProvider = Provider((_) => DownloadManager(Dio()));
+
+/// Notificaciones locales. El servicio se inicializa solo con el primer uso.
+final notificationServiceProvider = Provider((_) => NotificationService());

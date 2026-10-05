@@ -30,7 +30,7 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
   final _desc = TextEditingController();
   final _duration = TextEditingController(text: '0');
   final _difficulty = TextEditingController(text: '1');
-  final _thumbnailUrl = TextEditingController();
+  final _diseaseQuery = TextEditingController();
   final Set<String> _diseaseIds = {};
   final List<WorkoutItem> _items = [];
 
@@ -69,7 +69,6 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
       _desc.text = w.description;
       _duration.text = '${w.durationSeconds}';
       _difficulty.text = '${w.difficulty}';
-      _thumbnailUrl.text = w.thumbnailUrl ?? '';
       _diseaseIds
         ..clear()
         ..addAll(w.diseaseIds);
@@ -87,7 +86,7 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
     _desc.dispose();
     _duration.dispose();
     _difficulty.dispose();
-    _thumbnailUrl.dispose();
+    _diseaseQuery.dispose();
     super.dispose();
   }
 
@@ -104,6 +103,7 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
 
     final already = _items.map((e) => e.exerciseId).toSet();
     final selected = <String>{};
+    final query = TextEditingController();
 
     final ok = await showModalBottomSheet<bool>(
       context: context,
@@ -111,6 +111,14 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModal) {
+            final q = query.text.trim().toLowerCase();
+            final visible = q.isEmpty
+                ? usable
+                : usable
+                    .where((e) =>
+                        e.name.toLowerCase().contains(q) ||
+                        e.description.toLowerCase().contains(q))
+                    .toList();
             return DraggableScrollableSheet(
               expand: false,
               initialChildSize: 0.6,
@@ -134,34 +142,66 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
                     ),
                   ]),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    controller: query,
+                    onChanged: (_) => setModal(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar ejercicio...',
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                      suffixIcon: q.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setModal(query.clear),
+                            ),
+                    ),
+                  ),
+                ),
                 const Divider(height: 1),
                 Expanded(
-                  child: ListView.builder(
-                    controller: scroll,
-                    itemCount: usable.length,
-                    itemBuilder: (_, i) {
-                      final e = usable[i];
-                      final inClass = already.contains(e.id);
-                      final isSel = selected.contains(e.id);
-                      return CheckboxListTile(
-                        value: inClass || isSel,
-                        onChanged: inClass
-                            ? null
-                            : (v) => setModal(() {
-                                  if (v == true) {
-                                    selected.add(e.id);
-                                  } else {
-                                    selected.remove(e.id);
-                                  }
-                                }),
-                        title: Text(e.name),
-                        subtitle: Text(
-                          '${e.durationSeconds}s · dif. ${e.difficulty}'
-                          '${inClass ? ' · ya en la clase' : ''}',
+                  child: visible.isEmpty
+                      ? ListView(
+                          controller: scroll,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                'Ningún ejercicio coincide con «${query.text.trim()}».',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          controller: scroll,
+                          itemCount: visible.length,
+                          itemBuilder: (_, i) {
+                            final e = visible[i];
+                            final inClass = already.contains(e.id);
+                            final isSel = selected.contains(e.id);
+                            return CheckboxListTile(
+                              value: inClass || isSel,
+                              onChanged: inClass
+                                  ? null
+                                  : (v) => setModal(() {
+                                        if (v == true) {
+                                          selected.add(e.id);
+                                        } else {
+                                          selected.remove(e.id);
+                                        }
+                                      }),
+                              title: Text(e.name),
+                              subtitle: Text(
+                                '${e.durationSeconds}s · dif. ${e.difficulty}'
+                                '${inClass ? ' · ya en la clase' : ''}',
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
               ]),
             );
@@ -169,6 +209,8 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
         );
       },
     );
+
+    query.dispose();
 
     if (ok == true && selected.isNotEmpty) {
       setState(() {
@@ -253,8 +295,6 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
               durationSeconds: int.tryParse(_duration.text) ?? 0,
               difficulty: int.tryParse(_difficulty.text) ?? 1,
               videoId: videoId,
-              thumbnailUrl:
-                  _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
               items: List.of(_items),
               diseaseIds: _diseaseIds.toList(),
               status: _existing?.status ?? ContentStatus.draft,
@@ -339,22 +379,59 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
             builder: (list) {
               final usable = list.where((d) => d.status != ContentStatus.archived).toList();
               if (usable.isEmpty) return const Text('Crea enfermedades primero.');
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              final q = _diseaseQuery.text.trim().toLowerCase();
+              final filtered =
+                  q.isEmpty ? usable : usable.where((d) => d.name.toLowerCase().contains(q)).toList();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final d in usable)
-                    FilterChip(
-                      label: Text(d.name),
-                      selected: _diseaseIds.contains(d.id),
-                      onSelected: (sel) => setState(() {
-                        if (sel) {
-                          _diseaseIds.add(d.id);
-                        } else {
-                          _diseaseIds.remove(d.id);
-                        }
-                      }),
+                  TextField(
+                    controller: _diseaseQuery,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar enfermedad...',
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                      suffixIcon: q.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setState(_diseaseQuery.clear),
+                            ),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: SingleChildScrollView(
+                      child: filtered.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                'Ninguna enfermedad coincide con «${_diseaseQuery.text.trim()}».',
+                                style: TextStyle(color: c.onSurfaceVariant),
+                              ),
+                            )
+                          : Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final d in filtered)
+                                  FilterChip(
+                                    label: Text(d.name),
+                                    selected: _diseaseIds.contains(d.id),
+                                    onSelected: (sel) => setState(() {
+                                      if (sel) {
+                                        _diseaseIds.add(d.id);
+                                      } else {
+                                        _diseaseIds.remove(d.id);
+                                      }
+                                    }),
+                                  ),
+                              ],
+                            ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -454,11 +531,6 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
             Text('${(_uploadProgress * 100).toStringAsFixed(0)} %'),
           ],
 
-          const SizedBox(height: 14),
-          TextField(
-            controller: _thumbnailUrl,
-            decoration: const InputDecoration(labelText: 'URL miniatura (opcional)'),
-          ),
           if (_error != null) ...[
             const SizedBox(height: 16),
             Text(_error!, style: TextStyle(color: c.error)),

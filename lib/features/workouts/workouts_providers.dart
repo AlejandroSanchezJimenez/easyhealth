@@ -30,7 +30,8 @@ final allWorkoutsProvider = StreamProvider<List<Workout>>((ref) {
   return ref.watch(workoutRemoteProvider).watchAll();
 });
 
-/// Entrenamiento del día: UN ejercicio o clase aleatorio de la enfermedad elegida.
+/// Entrenamiento del día: UNA clase aleatoria de la enfermedad elegida.
+/// Si la clase no tiene vídeo propio, se concatenan los vídeos de sus ejercicios.
 /// Determinista por (usuario, enfermedad, fecha): no cambia al reconstruir la pantalla.
 final dailyPickProvider =
     Provider.family<AsyncValue<DailyPick?>, String>((ref, diseaseId) {
@@ -54,29 +55,52 @@ final dailyPickProvider =
     return const AsyncValue.loading();
   }
 
-  // Solo ejercicios/clases con vídeo: sin vídeo no hay forma de completarlos.
-  final candidates = <String, DailyPick>{
-    for (final e in exercises)
-      if (e.diseaseIds.contains(diseaseId) && e.videoId != null)
-        'exercise:${e.id}': DailyPick(
-          kind: 'exercise',
-          id: e.id,
-          name: e.name,
-          description: e.description,
-          durationSeconds: e.durationSeconds,
-          videoId: e.videoId!,
-        ),
-    for (final w in workouts)
-      if (w.diseaseIds.contains(diseaseId) && w.videoId != null)
-        'workout:${w.id}': DailyPick(
-          kind: 'workout',
-          id: w.id,
-          name: w.name,
-          description: w.description,
-          durationSeconds: w.durationSeconds,
-          videoId: w.videoId!,
-        ),
-  };
+  final exercisesById = {for (final e in exercises) e.id: e};
+
+  // Solo clases de la enfermedad. Cada una necesita vídeo propio o, si no tiene,
+  // al menos un ejercicio con vídeo: sin vídeo no hay forma de completarla.
+  final candidates = <String, DailyPick>{};
+  for (final w in workouts) {
+    if (!w.diseaseIds.contains(diseaseId)) continue;
+
+    if (w.videoId != null) {
+      candidates['workout:${w.id}'] = DailyPick(
+        kind: 'workout',
+        id: w.id,
+        name: w.name,
+        description: w.description,
+        durationSeconds: w.durationSeconds,
+        videoIds: [w.videoId!],
+        partNames: [w.name],
+      );
+      continue;
+    }
+
+    // Sin vídeo propio: se encadenan los de sus ejercicios, respetando el orden
+    // de la clase. Los ejercicios sin vídeo o inexistentes se omiten.
+    final videoIds = <String>[];
+    final partNames = <String>[];
+    var sumSeconds = 0;
+    for (final item in w.items) {
+      final e = exercisesById[item.exerciseId];
+      if (e == null || e.videoId == null) continue;
+      videoIds.add(e.videoId!);
+      partNames.add(e.name);
+      sumSeconds += e.durationSeconds;
+    }
+    if (videoIds.isEmpty) continue;
+
+    candidates['workout:${w.id}'] = DailyPick(
+      kind: 'workout',
+      id: w.id,
+      name: w.name,
+      description: w.description,
+      // Si la clase no declara duración, se usa la suma de sus ejercicios.
+      durationSeconds: w.durationSeconds > 0 ? w.durationSeconds : sumSeconds,
+      videoIds: videoIds,
+      partNames: partNames,
+    );
+  }
   if (candidates.isEmpty) return const AsyncValue.data(null);
 
   final today = dateKey(DateTime.now());

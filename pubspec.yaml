@@ -23,6 +23,9 @@ dependencies:
   video_player: ^2.9.1
   flutter_launcher_icons: ^0.14.4
   file_picker: ^8.0.0
+  flutter_local_notifications: ^20.1.0
+  timezone: ^0.10.1
+  google_mobile_ads: ^6.0.0 #Paquete para añadir anuncios
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import '../../../app/theme/app_colors_ext.dart';
 import '../../../core/providers.dart';
 import '../../../core/utils/date_key.dart';
 import '../../../shared/widgets/info_chip.dart';
+import '../../../shared/widgets/user_avatar.dart';
 import '../../auth/auth_providers.dart';
 import '../../diseases/diseases_providers.dart';
 import '../../diseases/selected_disease_provider.dart';
@@ -50,13 +51,7 @@ class HomePage extends ConsumerWidget {
                               ?.copyWith(fontWeight: FontWeight.w800)),
                     ]),
               ),
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: c.primaryContainer,
-                foregroundColor: c.onPrimaryContainer,
-                child: Text(name.isEmpty ? '?' : name[0].toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-              ),
+              const UserAvatar(radius: 22),
             ]),
             const SizedBox(height: 20),
 
@@ -66,6 +61,7 @@ class HomePage extends ConsumerWidget {
             ],
 
             const _StreakCard(),
+            const _NotificationTestCard(),
             const SizedBox(height: 20),
             const _DailyCard(),
 
@@ -155,6 +151,51 @@ class _StreakCard extends ConsumerWidget {
             style: t.bodyMedium?.copyWith(
                 color: c.onPrimaryContainer, fontWeight: FontWeight.w600)),
       ]),
+    );
+  }
+}
+
+/// Botón temporal para verificar los cuatro avisos del día sin esperar a sus
+/// horas. Se quitará cuando se valide el tono y la programación.
+class _NotificationTestCard extends ConsumerWidget {
+  const _NotificationTestCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = Theme.of(context).colorScheme;
+    final streak = ref.watch(streakStatsProvider).valueOrNull?.currentStreak ?? 0;
+    return Card(
+      margin: const EdgeInsets.only(top: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(children: [
+          Icon(Icons.notifications_active_outlined, color: c.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Probar avisos',
+                      style: Theme.of(context).textTheme.titleSmall),
+                  Text('Racha actual: $streak',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: c.onSurfaceVariant)),
+                ]),
+          ),
+          OutlinedButton(
+            onPressed: () async {
+              final message = await ref
+                  .read(notificationServiceProvider)
+                  .sendAllTest(streak: streak);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(content: Text(message)));
+            },
+            child: const Text('Enviar'),
+          ),
+        ]),
+      ),
     );
   }
 }
@@ -258,7 +299,7 @@ class _DailyCard extends ConsumerWidget {
             data: (pick) {
               if (pick == null) {
                 return Text(
-                    'Aún no hay ejercicios ni clases con vídeo para esta enfermedad.',
+                    'Aún no hay clases con vídeo para esta enfermedad.',
                     style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant));
               }
               final done = doneToday.contains(pick.key);
@@ -271,6 +312,10 @@ class _DailyCard extends ConsumerWidget {
                           icon: pick.isWorkout
                               ? Icons.class_outlined
                               : Icons.fitness_center),
+                      if (pick.isSequence)
+                        InfoChip(
+                            label: '${pick.videoIds.length} vídeos',
+                            icon: Icons.playlist_play),
                       if (pick.durationSeconds > 0)
                         InfoChip(
                             label: formatMinutes(pick.durationSeconds),

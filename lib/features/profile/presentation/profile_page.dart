@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors_ext.dart';
+import '../../../core/profile/profile_photo_picker.dart';
 import '../../../shared/widgets/info_chip.dart';
+import '../../../shared/widgets/user_avatar.dart';
 import '../../auth/auth_providers.dart';
 import '../../auth/domain/app_user.dart';
 import '../../diseases/diseases_providers.dart';
@@ -69,13 +71,10 @@ class ProfilePage extends ConsumerWidget {
                   color: c.primaryContainer,
                   borderRadius: BorderRadius.circular(28)),
               child: Row(children: [
-                CircleAvatar(
+                UserAvatar(
                   radius: 34,
-                  backgroundColor: c.primary,
-                  foregroundColor: c.onPrimary,
-                  child: Text(title[0].toUpperCase(),
-                      style: t.headlineMedium?.copyWith(
-                          color: c.onPrimary, fontWeight: FontWeight.w800)),
+                  showEditBadge: true,
+                  onTap: () => pickAndUploadProfilePhoto(context, ref),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
