@@ -147,33 +147,38 @@ service cloud.firestore {
 
         allow read: if isOwner(uid);
 
-        // Cada quien crea documentos declarándose el iniciador.
-        // OJO: `requestedBy == request.auth.uid` (NO == uid). A escribe el
-        // espejo en la lista de B, así que el iniciador es A pero el dueño
-        // del documento es B. Con `== uid` el espejo nunca podría crearse.
-        allow create: if isOwner(uid)
+        // ── Crear ──
+        // El documento espejo se escribe en la lista del OTRO, así que el
+        // dueño del documento (uid) NO es quien lo crea. Por eso NO se exige
+        // isOwner(uid): basta con estar autenticado y declararse iniciador.
+        //
+        // `requestedBy == request.auth.uid` impide que un tercero fabrique una
+        // solicitud "de parte de" otro: solo puedes iniciar tú.
+        allow create: if signedIn()
           && request.resource.data.requestedBy == request.auth.uid
           && request.resource.data.status in ['pending', 'accepted']
           && request.resource.data.keys().hasOnly(
                ['status', 'requestedBy', 'displayName', 'photoUrl', 'createdAt']);
 
-        // Aceptar: puede hacerlo quien ENVIÓ la solicitud o quien la RECIBIÓ
-        // (friendId == tú significa "este documento de mi lista habla de mí").
-        // Con `requestedBy == request.auth.uid` solo, el receptor nunca podría
-        // aceptar, porque en SU documento el iniciador es el otro.
+        // ── Aceptar ──
+        // El que acepta es el RECEPTOR, y actualiza DOS documentos:
+        //   1. users/{yo}/friends/{iniciador}  -> isOwner(uid) es verdad
+        //   2. users/{iniciador}/friends/{yo}  -> isOwner(uid) es FALSO
+        // Por eso hace falta `(isOwner(uid) || friendId == request.auth.uid)`:
+        // puedes tocar documentos de tu lista o los que te representan en la
+        // del otro. Sin el segundo término, aceptar rompería.
         //
-        // Solo se puede pasar a 'accepted' y tocar estado/fecha/nombre/foto.
+        // Solo se permite pasar a 'accepted' y tocar estado/fecha/nombre/foto.
         // No se puede reescribir requestedBy ni adjudicarse una ajena.
-        allow update: if isOwner(uid)
-          && (resource.data.requestedBy == request.auth.uid
-              || friendId == request.auth.uid)
+        allow update: if (isOwner(uid) || friendId == request.auth.uid)
           && request.resource.data.status == 'accepted'
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'acceptedAt', 'displayName', 'photoUrl']);
 
-        // Eliminar un vínculo: puedes borrar el tuyo o la copia que tienes en
-        // la lista del otro (friendId == tú). Sin esto, quitar a un amigo
-        // dejaría su copia huérfana en tu lista.
+        // ── Eliminar ──
+        // Mismo razonamiento: puedes borrar el tuyo o la copia que te
+        // representa en la lista del otro. Si no, quitar a un amigo dejaría
+        // su copia huérfana en tu lista.
         allow delete: if isOwner(uid) || friendId == request.auth.uid;
       }
 

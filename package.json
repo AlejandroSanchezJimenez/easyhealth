@@ -16,6 +16,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "firebase-admin": "^14.5.0"
   }
 }

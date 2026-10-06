@@ -113,13 +113,6 @@ class ProfilePage extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.go('/explore'),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.group_outlined),
-                  title: const Text('Amigos'),
-                  subtitle: const Text('Gestiona tus vínculos y tu código'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/friends'),
-                ),
                 if (user?.role.canManageContent ?? false) ...[
                   Divider(height: 1, color: c.outlineVariant),
                   ListTile(

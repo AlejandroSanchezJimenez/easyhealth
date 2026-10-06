@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../../core/constants/app_info.dart';
 import '../../auth/auth_providers.dart';
 import '../friends_providers.dart';
 
@@ -100,9 +102,7 @@ class _CodeBox extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             OutlinedButton.icon(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Compártelo con $code')),
-              ),
+              onPressed: () => Share.share(AppInfo.inviteMessage(code)),
               icon: const Icon(Icons.ios_share_rounded),
               label: const Text('Compartir'),
             ),

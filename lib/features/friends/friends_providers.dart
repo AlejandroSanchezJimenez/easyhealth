@@ -122,6 +122,12 @@ String _myName(dynamic me) {
 ///
 /// Escribe los DOS documentos espejo en `pending` (el mío y el suyo), así el
 /// vínculo es mutuo desde el principio y ambos lo ven en su lista.
+///
+/// OJO: si el vínculo YA EXISTE hay que resolverlo, no reescribirlo. En
+/// Firestore, `set()` sobre un documento existente cuenta como UPDATE, y la
+/// regla de update solo deja pasar a `accepted`. Un `set()` con `pending`
+/// daría PERMISSION_DENIED. Ocurre, por ejemplo, cuando la otra persona ya te
+/// añadió a ti antes.
 final addFriendProvider = Provider((ref) => (String rawCode) async {
       final me = ref.read(currentUserProvider);
       if (me == null) throw StateError('No hay sesión abierta.');
@@ -143,19 +149,39 @@ final addFriendProvider = Provider((ref) => (String rawCode) async {
       }
       if (otherUid == me.uid) throw StateError('Ese código es el tuyo.');
 
-      // No machacar una amistad ya aceptada: se degrada a pending sin motivo.
-      final existing =
-          await _linksOf(ref, me.uid).doc(otherUid).get();
-      if (existing.exists &&
-          FriendStatus.parse(existing.data()?['status'] as String?) ==
-              FriendStatus.accepted) {
-        return '${data['displayName'] ?? 'Tu amigo'} ya está en tu lista.';
+      final otherName = data['displayName'] as String? ?? 'tu amigo';
+
+      // ¿Existe ya un vínculo en mi lista?
+      final existing = await _linksOf(ref, me.uid).doc(otherUid).get();
+      if (existing.exists) {
+        final m = Map<String, dynamic>.from(existing.data() ?? const {});
+        final status = FriendStatus.parse(m['status'] as String?);
+        final requestedBy = m['requestedBy'] as String?;
+
+        if (status == FriendStatus.accepted) {
+          return '$otherName ya está en tu lista.';
+        }
+        if (requestedBy == me.uid) {
+          return 'Ya le enviaste una solicitud a $otherName. '
+              'Falta que la acepte.';
+        }
+        // Pendiente y la pidió él/ella: meter el código equivale a aceptar.
+        // Se hace con update (merge) para que la regla lo permita.
+        await ref.read(acceptFriendProvider)(Friend(
+              uid: otherUid,
+              status: status,
+              requestedBy: requestedBy ?? otherUid,
+              displayName: otherName,
+              photoUrl: data['photoUrl'] as String?,
+            ));
+        return '¡Hecho! Ahora tú y $otherName sois amigos.';
       }
 
+      // Vínculo nuevo: se escriben los DOS espejos en `pending`.
       final link = {
         'status': FriendStatus.pending.name,
         'requestedBy': me.uid,
-        'displayName': data['displayName'] as String? ?? '',
+        'displayName': otherName,
         'photoUrl': data['photoUrl'] as String?,
       };
 
@@ -171,7 +197,7 @@ final addFriendProvider = Provider((ref) => (String rawCode) async {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      return 'Solicitud enviada a ${data['displayName'] ?? 'tu amigo'}.';
+      return 'Solicitud enviada a $otherName.';
     });
 
 /// Acepta una solicitud pendiente: ambos documentos pasan a `accepted`.

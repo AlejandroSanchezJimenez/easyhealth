@@ -6,7 +6,11 @@ import '../../../shared/widgets/async_view.dart';
 import '../domain/friend.dart';
 import '../friends_providers.dart';
 
-/// Pantalla de Amigos: racha de cada uno y solicitud pendientes.
+/// Pantalla de Amigos, con dos pestañas:
+///
+///   - **Amigos**: los vínculos ACEPTADOS, con su racha.
+///   - **Invitaciones**: las solicitudes que me han enviado. Lleva un badge
+///     con el número de pendientes y botones de aceptar/rechazar.
 ///
 /// La racha de un amigo sale de `userStreaks/{uid}`, que escribe una Cloud
 /// Function. Si no existe todavía, se indica en vez de fingir un 0.
@@ -19,66 +23,122 @@ class FriendsPage extends ConsumerWidget {
     final pending = ref.watch(pendingRequestsProvider);
     final streaks = ref.watch(friendsStreaksProvider);
 
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-        children: [
-          Row(children: [
+    return DefaultTabController(
+      length: 2,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+              child: Row(children: [
+                Expanded(
+                  child: Text('Amigos',
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Gestionar amigos',
+                  icon: const Icon(Icons.group_add),
+                  onPressed: () => context.push('/friends/manage'),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 4),
+            TabBar(
+              tabs: [
+                const Tab(text: 'Amigos'),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Invitaciones'),
+                      // El número solo aparece si hay alguna pendiente.
+                      if (pending.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Badge(label: Text('${pending.length}')),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
             Expanded(
-              child: Text('Amigos',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w800)),
-            ),
-            IconButton.filledTonal(
-              tooltip: 'Gestionar amigos',
-              icon: const Icon(Icons.group_add),
-              onPressed: () => context.push('/friends/manage'),
-            ),
-          ]),
-
-          // ── Solicitudes por aceptar ──
-          if (pending.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Text('Solicitudes',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            for (final f in pending) _PendingTile(friend: f),
-          ],
-
-          const SizedBox(height: 20),
-          Text('Tus amigos',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-
-          AsyncView(
-            value: friendsAsync,
-            builder: (friends) {
-              final accepted =
-                  friends.where((f) => f.status == FriendStatus.accepted).toList();
-              if (accepted.isEmpty) {
-                return _EmptyFriends(
-                  hasAnyLink: friends.isNotEmpty,
-                  onManage: () => context.push('/friends/manage'),
-                );
-              }
-              return Column(
+              child: TabBarView(
                 children: [
-                  for (final f in accepted)
-                    _FriendTile(friend: f, streak: streaks.valueOrNull?[f.uid]),
+                  _FriendsTab(friends: friendsAsync, streaks: streaks),
+                  _InvitesTab(pending: pending),
                 ],
-              );
-            },
-          ),
-        ],
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+// ───────────── Pestaña: Amigos ─────────────
+
+class _FriendsTab extends StatelessWidget {
+  const _FriendsTab({required this.friends, required this.streaks});
+
+  final AsyncValue<List<Friend>> friends;
+  final AsyncValue<Map<String, ResolvedStreak>> streaks;
+
+  @override
+  Widget build(BuildContext context) {
+    return AsyncView(
+      value: friends,
+      builder: (list) {
+        final accepted =
+            list.where((f) => f.status == FriendStatus.accepted).toList();
+
+        if (accepted.isEmpty) {
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            children: [
+              _EmptyFriends(
+                hasAnyLink: list.isNotEmpty,
+                onManage: () => context.push('/friends/manage'),
+              ),
+            ],
+          );
+        }
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          children: [
+            for (final f in accepted)
+              _FriendTile(friend: f, streak: streaks.valueOrNull?[f.uid]),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ───────────── Pestaña: Invitaciones ─────────────
+
+class _InvitesTab extends StatelessWidget {
+  const _InvitesTab({required this.pending});
+  final List<Friend> pending;
+
+  @override
+  Widget build(BuildContext context) {
+    if (pending.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        children: const [_EmptyInvites()],
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      children: [
+        for (final f in pending) _PendingTile(friend: f),
+      ],
     );
   }
 }
@@ -110,7 +170,9 @@ class _FriendTile extends ConsumerWidget {
           subtitle: Text(_statusLine(s)),
           trailing: s == null || !s.hasData
               ? const SizedBox(
-                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : s.isActive
                   ? Row(mainAxisSize: MainAxisSize.min, children: [
                       const Icon(Icons.local_fire_department_rounded,
@@ -182,12 +244,36 @@ class _FriendTile extends ConsumerWidget {
   }
 }
 
-class _PendingTile extends ConsumerWidget {
+class _PendingTile extends ConsumerStatefulWidget {
   const _PendingTile({required this.friend});
   final Friend friend;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PendingTile> createState() => _PendingTileState();
+}
+
+class _PendingTileState extends ConsumerState<_PendingTile> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action, String errorLabel) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$errorLabel: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.friend;
+    final name = f.displayName.isEmpty ? 'Alguien' : f.displayName;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Card(
@@ -195,37 +281,40 @@ class _PendingTile extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
           child: Row(children: [
-            _FriendAvatar(friend: friend),
+            _FriendAvatar(friend: f),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(friend.displayName.isEmpty ? 'Amigo' : friend.displayName,
+                    Text(name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     const Text('Quiere ser tu amigo',
                         style: TextStyle(fontSize: 12)),
                   ]),
             ),
-            IconButton(
-              tooltip: 'Rechazar',
-              icon: const Icon(Icons.close),
-              onPressed: () => ref.read(removeFriendProvider)(friend),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
-              onPressed: () async {
-                try {
-                  await ref.read(acceptFriendProvider)(friend);
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text('No se pudo aceptar: $e')));
-                  }
-                }
-              },
-              child: const Text('Aceptar'),
-            ),
+            if (_busy)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else ...[
+              IconButton(
+                tooltip: 'Rechazar',
+                icon: const Icon(Icons.close),
+                onPressed: () => _run(
+                    () => ref.read(removeFriendProvider)(f), 'No se pudo rechazar'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                onPressed: () => _run(
+                    () => ref.read(acceptFriendProvider)(f), 'No se pudo aceptar'),
+                child: const Text('Aceptar'),
+              ),
+            ],
           ]),
         ),
       ),
@@ -286,8 +375,8 @@ class _EmptyFriends extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             hasAnyLink
-                ? 'Todavía no aceptas a nadie. En "Tus amigos" solo aparecen los '
-                    'vínculos aceptados.'
+                ? 'Todavía no aceptas a nadie. Mira en "Invitaciones": puede que '
+                    'alguien te haya añadido.'
                 : 'Todavía no tienes amigos. Pide su código de invitación y '
                     'añádelos.',
             textAlign: TextAlign.center,
@@ -308,5 +397,29 @@ class _EmptyFriends extends StatelessWidget {
   }
 }
 
-/// Rótulo reutilizable para el chip del código propio.
-String inviteCodeHint(String code) => 'Tu código: $code';
+class _EmptyInvites extends StatelessWidget {
+  const _EmptyInvites();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(children: [
+          Icon(Icons.mark_email_unread_outlined, size: 40, color: c.primary),
+          const SizedBox(height: 10),
+          Text(
+            'No tienes invitaciones pendientes. Cuando alguien te añada con tu '
+            'código, aparecerá aquí para que la aceptes o la rechaces.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: c.onSurfaceVariant),
+          ),
+        ]),
+      ),
+    );
+  }
+}
