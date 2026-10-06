@@ -142,3 +142,25 @@ DateTime _asDateKey(String key) {
   final p = key.split('-').map(int.parse).toList();
   return DateTime(p[0], p[1], p[2]);
 }
+
+/// Perfil público mínimo de un usuario: lo único que un amigo puede ver.
+///
+/// Sale de `userProfiles/{uid}`. Es FRESCO, a diferencia de los campos
+/// desnormalizados del vínculo, que se copiaron al añadir y se quedan viejos
+/// si la persona cambia luego su foto.
+@immutable
+class PublicProfile {
+  const PublicProfile({this.displayName, this.photoUrl});
+
+  final String? displayName;
+  final String? photoUrl;
+
+  factory PublicProfile.fromMap(Map<String, dynamic>? m) {
+    final n = (m?['displayName'] as String?)?.trim();
+    final p = (m?['photoUrl'] as String?)?.trim();
+    return PublicProfile(
+      displayName: (n == null || n.isEmpty) ? null : n,
+      photoUrl: (p == null || p.isEmpty) ? null : p,
+    );
+  }
+}

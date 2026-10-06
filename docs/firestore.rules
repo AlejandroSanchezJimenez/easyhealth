@@ -47,6 +47,20 @@ service cloud.firestore {
 
 
     // ══════════════════════════════════════════════════════════════
+    //  NUEVO — Perfil público (nombre y foto)
+    // ══════════════════════════════════════════════════════════════
+    // Para que un amigo pueda ver tu foto. `users/{uid}` solo lo lee su dueño
+    // o un admin, así que aquí va un resumen SIN datos sensibles: únicamente
+    // nombre y foto. Nunca email ni rol.
+    match /userProfiles/{uid} {
+      allow read: if signedIn();
+
+      // Cada uno escribe SOLO el suyo.
+      allow write: if isOwner(uid);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════
     //  NUEVO — Códigos de invitación
     // ══════════════════════════════════════════════════════════════
     // OJO: va en el NIVEL RAÍZ (hermano de `match /users/{uid}`),

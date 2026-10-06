@@ -13,6 +13,13 @@ class FirestorePaths {
   /// Function; el cliente solo lee.
   static const userStreaks = 'userStreaks';
 
+  /// Perfil público mínimo: `{displayName, photoUrl}`. Lo escribe cada usuario
+  /// sobre sí mismo y lo puede leer cualquier autenticado.
+  ///
+  /// Existe porque `users/{uid}` solo lo lee su dueño o un admin, así que un
+  /// amigo no podría ver la foto. Aquí NO hay email ni rol.
+  static const userProfiles = 'userProfiles';
+
   static String history(String uid) => '$users/$uid/history';
   static String progress(String uid) => '$users/$uid/progress';
   static String friends(String uid) => '$users/$uid/friends';

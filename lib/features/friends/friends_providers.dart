@@ -12,6 +12,12 @@ import 'domain/friend.dart';
 CollectionReference<Map<String, dynamic>> _linksOf(Ref ref, String uid) =>
     ref.read(firestoreProvider).collection(FirestorePaths.friends(uid));
 
+/// Mi foto de perfil REAL, la de Firestore.
+///
+/// `AppUser.photoUrl` viene de Firebase Auth y está VACÍO en las cuentas de
+/// email/contraseña, así que no sirve para desnormalizar: guardaría null.
+String? _myPhoto(Ref ref) => ref.read(userPhotoUrlProvider);
+
 /// Lista de MIS vínculos. Cada documento es un amigo visto desde mi cuenta.
 final friendsProvider = StreamProvider<List<Friend>>((ref) {
   final uid = ref.watch(uidProvider);
@@ -41,6 +47,20 @@ final pendingRequestsProvider = Provider<List<Friend>>((ref) {
   final all = ref.watch(friendsProvider).valueOrNull ?? const <Friend>[];
   if (me == null) return const [];
   return all.where((f) => f.isPendingFrom(me)).toList();
+});
+
+/// Solicitudes que HE ENVIADO yo y siguen pendientes de que las acepten.
+///
+/// No cuentan para el badge (no requieren acción mía), pero se muestran en
+/// Invitaciones para que sepas que están en el aire y puedas cancelarlas.
+final sentRequestsProvider = Provider<List<Friend>>((ref) {
+  final me = ref.watch(currentUserProvider)?.uid;
+  final all = ref.watch(friendsProvider).valueOrNull ?? const <Friend>[];
+  if (me == null) return const [];
+  return all
+      .where((f) =>
+          f.status == FriendStatus.pending && f.requestedBy == me)
+      .toList();
 });
 
 /// Resumen de racha de cada amigo ACEPTADO.
@@ -77,6 +97,33 @@ final friendsStreaksProvider =
 
 const _noData = ResolvedStreak(streak: 0, inactiveDays: null, hasData: false);
 
+/// Nombre y foto FRESCOS de cada amigo ACEPTADO.
+///
+/// Se leen de `userProfiles/{uid}`, que sí es público, porque `users/{uid}` no
+/// lo es. Los campos guardados en el vínculo se copiaron al añadir y pueden
+/// estar viejos; estos no.
+final friendsProfilesProvider =
+    FutureProvider<Map<String, PublicProfile>>((ref) async {
+  final me = ref.watch(currentUserProvider)?.uid;
+  final friends = (ref.watch(friendsProvider).valueOrNull ?? const <Friend>[])
+      .where((f) => f.status == FriendStatus.accepted)
+      .toList();
+  if (me == null || friends.isEmpty) return const {};
+
+  final fs = ref.watch(firestoreProvider);
+  final entries = await Future.wait(friends.map((f) async {
+    try {
+      final doc =
+          await fs.collection(FirestorePaths.userProfiles).doc(f.uid).get();
+      return MapEntry(f.uid, PublicProfile.fromMap(doc.data()));
+    } catch (_) {
+      // Si falla, la vista cae al nombre/foto desnormalizados del vínculo.
+      return MapEntry(f.uid, const PublicProfile());
+    }
+  }));
+  return Map.fromEntries(entries);
+});
+
 /// Mi código de invitación, p. ej. `K7X2M9`.
 ///
 /// Se guarda en `inviteCodes/{code}` apuntando a mi uid, con nombre y foto,
@@ -96,7 +143,7 @@ final inviteCodeProvider = FutureProvider<String?>((ref) async {
   await codes.doc(code).set({
     'uid': me.uid,
     'displayName': _myName(me),
-    'photoUrl': me.photoUrl,
+    'photoUrl': _myPhoto(ref),
     'createdAt': FieldValue.serverTimestamp(),
   });
   return code;
@@ -193,7 +240,7 @@ final addFriendProvider = Provider((ref) => (String rawCode) async {
         ...link,
         // El suyo aún no conoce MI nombre: se lo escribo ahora.
         'displayName': _myName(me),
-        'photoUrl': me.photoUrl,
+        'photoUrl': _myPhoto(ref),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -217,7 +264,7 @@ final acceptFriendProvider = Provider((ref) => (Friend f) async {
       await _linksOf(ref, f.uid).doc(me.uid).set({
         ...accepted,
         'displayName': _myName(me),
-        'photoUrl': me.photoUrl,
+        'photoUrl': _myPhoto(ref),
       }, SetOptions(merge: true));
     });
 

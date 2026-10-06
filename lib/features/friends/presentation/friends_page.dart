@@ -21,7 +21,9 @@ class FriendsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final friendsAsync = ref.watch(friendsProvider);
     final pending = ref.watch(pendingRequestsProvider);
+    final sent = ref.watch(sentRequestsProvider);
     final streaks = ref.watch(friendsStreaksProvider);
+    final profiles = ref.watch(friendsProfilesProvider);
 
     return DefaultTabController(
       length: 2,
@@ -67,8 +69,11 @@ class FriendsPage extends ConsumerWidget {
             Expanded(
               child: TabBarView(
                 children: [
-                  _FriendsTab(friends: friendsAsync, streaks: streaks),
-                  _InvitesTab(pending: pending),
+                  _FriendsTab(
+                      friends: friendsAsync,
+                      streaks: streaks,
+                      profiles: profiles),
+                  _InvitesTab(pending: pending, sent: sent),
                 ],
               ),
             ),
@@ -82,10 +87,12 @@ class FriendsPage extends ConsumerWidget {
 // ───────────── Pestaña: Amigos ─────────────
 
 class _FriendsTab extends StatelessWidget {
-  const _FriendsTab({required this.friends, required this.streaks});
+  const _FriendsTab(
+      {required this.friends, required this.streaks, required this.profiles});
 
   final AsyncValue<List<Friend>> friends;
   final AsyncValue<Map<String, ResolvedStreak>> streaks;
+  final AsyncValue<Map<String, PublicProfile>> profiles;
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +118,11 @@ class _FriendsTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
           children: [
             for (final f in accepted)
-              _FriendTile(friend: f, streak: streaks.valueOrNull?[f.uid]),
+              _FriendTile(
+                friend: f,
+                streak: streaks.valueOrNull?[f.uid],
+                profile: profiles.valueOrNull?[f.uid],
+              ),
           ],
         );
       },
@@ -122,41 +133,93 @@ class _FriendsTab extends StatelessWidget {
 // ───────────── Pestaña: Invitaciones ─────────────
 
 class _InvitesTab extends StatelessWidget {
-  const _InvitesTab({required this.pending});
+  const _InvitesTab({required this.pending, required this.sent});
+
+  /// Recibidas: me las enviaron a mí y esperan mi respuesta.
   final List<Friend> pending;
+
+  /// Enviadas por mí, aún sin aceptar. No cuentan para el badge.
+  final List<Friend> sent;
 
   @override
   Widget build(BuildContext context) {
-    if (pending.isEmpty) {
+    if (pending.isEmpty && sent.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
         children: const [_EmptyInvites()],
       );
     }
 
+    // Solo hacen falta cabeceras cuando conviven los dos tipos; si solo hay
+    // uno, el nombre de la pestaña ya lo dice todo.
+    final showHeaders = pending.isNotEmpty && sent.isNotEmpty;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
       children: [
-        for (final f in pending) _PendingTile(friend: f),
+        if (pending.isNotEmpty) ...[
+          if (showHeaders) const _SectionLabel('Recibidas'),
+          for (final f in pending) _PendingTile(friend: f),
+        ],
+        if (sent.isNotEmpty) ...[
+          if (showHeaders) ...[
+            const SizedBox(height: 12),
+            const _SectionLabel('Enviadas'),
+          ],
+          for (final f in sent) _SentTile(friend: f),
+        ],
       ],
     );
   }
 }
 
+/// Cabecera de sección dentro de una pestaña.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w800)),
+      );
+}
+
 // ───────────── Vistas ─────────────
 
 class _FriendTile extends ConsumerWidget {
-  const _FriendTile({required this.friend, required this.streak});
+  const _FriendTile(
+      {required this.friend, required this.streak, this.profile});
 
   final Friend friend;
 
   /// null = aún se está calculando; `hasData:false` = la Function no ha escrito.
   final ResolvedStreak? streak;
 
+  /// Perfil público fresco (foto/nombre). Puede no haber llegado todavía.
+  final PublicProfile? profile;
+
+  /// Nombre a mostrar: el fresco si lo hay; si no, el copiado en el vínculo.
+  String get _name {
+    final n = profile?.displayName;
+    if (n != null && n.isNotEmpty) return n;
+    return friend.displayName.isEmpty ? 'Amigo' : friend.displayName;
+  }
+
+  /// Foto a mostrar: la fresca si la hay; si no, la copiada en el vínculo.
+  String? get _photo {
+    final p = profile?.photoUrl;
+    if (p != null && p.isNotEmpty) return p;
+    return friend.photoUrl;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).colorScheme;
-    final s = streak;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -164,31 +227,58 @@ class _FriendTile extends ConsumerWidget {
         child: ListTile(
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: _FriendAvatar(friend: friend),
-          title: Text(friend.displayName.isEmpty ? 'Amigo' : friend.displayName,
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Text(_statusLine(s)),
-          trailing: s == null || !s.hasData
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : s.isActive
-                  ? Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.local_fire_department_rounded,
-                          color: Colors.orange, size: 22),
-                      const SizedBox(width: 4),
-                      Text('${s.streak}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800)),
-                    ])
-                  : Text('—', style: TextStyle(color: c.onSurfaceVariant)),
-          onTap: () => _confirmRemove(context, ref, friend),
+          leading: _FriendAvatar(name: _name, photoUrl: _photo),
+          title:
+              Text(_name, style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text(_statusLine(streak)),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            _streakBadge(context, streak),
+            // Papelera explícita: que se vea que ahí se borra.
+            IconButton(
+              tooltip: 'Eliminar amigo',
+              icon: Icon(Icons.delete_outline, color: c.error),
+              onPressed: () => _confirmRemove(context, ref, friend),
+            ),
+          ]),
         ),
       ),
     );
+  }
+
+  /// Indicador de racha.
+  ///
+  /// OJO: `hasData:false` significa "la Cloud Function aún no ha escrito el
+  /// resumen", NO "cargando". Si aquí se pintara un spinner, giraría para
+  /// siempre, porque ese resumen puede no llegar nunca.
+  Widget _streakBadge(BuildContext context, ResolvedStreak? s) {
+    final c = Theme.of(context).colorScheme;
+
+    if (s == null) {
+      // Esto SÍ es cargando: la consulta está en vuelo.
+      return const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (!s.hasData) {
+      return Tooltip(
+        message: 'Sin datos de racha todavía',
+        child: Text('—', style: TextStyle(color: c.onSurfaceVariant)),
+      );
+    }
+    if (s.isActive) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.local_fire_department_rounded,
+            color: Colors.orange, size: 22),
+        const SizedBox(width: 4),
+        Text('${s.streak}',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800)),
+      ]);
+    }
+    return Text('—', style: TextStyle(color: c.onSurfaceVariant));
   }
 
   /// Racha viva: "3 días de racha". Sin racha: cuánto lleva sin entrenar.
@@ -281,7 +371,8 @@ class _PendingTileState extends ConsumerState<_PendingTile> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
           child: Row(children: [
-            _FriendAvatar(friend: f),
+            _FriendAvatar(
+                name: f.displayName, photoUrl: f.photoUrl),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -322,18 +413,79 @@ class _PendingTileState extends ConsumerState<_PendingTile> {
   }
 }
 
-/// Avatar del amigo: usa su foto desnormalizada; si no, la inicial.
-class _FriendAvatar extends StatelessWidget {
-  const _FriendAvatar({required this.friend});
+/// Una solicitud que YO envié y sigue pendiente. Se puede cancelar.
+class _SentTile extends ConsumerStatefulWidget {
+  const _SentTile({required this.friend});
   final Friend friend;
+
+  @override
+  ConsumerState<_SentTile> createState() => _SentTileState();
+}
+
+class _SentTileState extends ConsumerState<_SentTile> {
+  bool _busy = false;
+
+  Future<void> _cancel() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(removeFriendProvider)(widget.friend);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Solicitud cancelada.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('No se pudo cancelar: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.friend;
+    final name = f.displayName.isEmpty ? 'Alguien' : f.displayName;
+    final c = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        child: ListTile(
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: _FriendAvatar(name: f.displayName, photoUrl: f.photoUrl),
+          title:
+              Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: const Text('Solicitud enviada, sin aceptar'),
+          trailing: _busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : TextButton(
+                  onPressed: _cancel,
+                  child: Text('Cancelar', style: TextStyle(color: c.error)),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Avatar del amigo: su foto si la tiene; si no, la inicial.
+class _FriendAvatar extends StatelessWidget {
+  const _FriendAvatar({required this.name, this.photoUrl});
+  final String name;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
     const r = 24.0;
-    final initial =
-        friend.displayName.isEmpty ? '?' : friend.displayName[0].toUpperCase();
-    final url = friend.photoUrl;
+    final initial = name.isEmpty ? '?' : name[0].toUpperCase();
+    final url = photoUrl;
 
     return ClipOval(
       child: SizedBox(
@@ -410,8 +562,9 @@ class _EmptyInvites extends StatelessWidget {
           Icon(Icons.mark_email_unread_outlined, size: 40, color: c.primary),
           const SizedBox(height: 10),
           Text(
-            'No tienes invitaciones pendientes. Cuando alguien te añada con tu '
-            'código, aparecerá aquí para que la aceptes o la rechaces.',
+            'No tienes invitaciones pendientes. Aquí aparecen tanto las que te '
+            'envían (para aceptarlas o rechazarlas) como las que envías tú '
+            '(para cancelarlas si te arrepientes).',
             textAlign: TextAlign.center,
             style: Theme.of(context)
                 .textTheme

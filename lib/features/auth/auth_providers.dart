@@ -55,6 +55,42 @@ final userPhotoUrlProvider = Provider<String?>((ref) {
   return (url is String && url.isNotEmpty) ? url : null;
 });
 
+/// Publica mi perfil público en `userProfiles/{uid}`.
+///
+/// Por qué: las reglas no dejan leer `users/{uid}` de otra persona, así que
+/// tus amigos no podrían ver tu foto. Este documento es un resumen público
+/// (solo nombre y foto; nunca email ni rol).
+///
+/// Se ejecuta al abrir la app y cada vez que cambia mi perfil. Si falla (sin
+/// conexión, regla denegada), se ignora: es un dato secundario.
+final publishMyProfileProvider = Provider<void>((ref) {
+  final uid = ref.watch(uidProvider);
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  if (uid == null || profile == null) return;
+
+  final name = (profile['displayName'] as String?)?.trim();
+  final photo = (profile['photoUrl'] as String?)?.trim();
+
+  _publishProfile(ref, uid, {
+    'displayName': (name == null || name.isEmpty) ? null : name,
+    'photoUrl': (photo == null || photo.isEmpty) ? null : photo,
+    'updatedAt': FieldValue.serverTimestamp(),
+  }).ignore();
+});
+
+Future<void> _publishProfile(
+    Ref ref, String uid, Map<String, dynamic> payload) async {
+  try {
+    await ref
+        .read(firestoreProvider)
+        .collection(FirestorePaths.userProfiles)
+        .doc(uid)
+        .set(payload, SetOptions(merge: true));
+  } catch (_) {
+    // Silencio a propósito: es un dato secundario.
+  }
+}
+
 /// Sube una imagen a Storage y guarda su URL en el documento del usuario.
 /// Devuelve la URL nueva.
 final uploadProfilePhotoProvider =
