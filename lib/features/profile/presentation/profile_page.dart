@@ -42,6 +42,17 @@ class ProfilePage extends ConsumerWidget {
     if (ok == true) await ref.read(authRepositoryProvider).signOut();
   }
 
+  /// Borra la cuenta y todos los datos. El diálogo pide la contraseña; sin
+  /// ella no se borra nada.
+  Future<void> _confirmDeleteAccount(
+      BuildContext context, WidgetRef ref) async {
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = Theme.of(context).colorScheme;
@@ -143,7 +154,17 @@ class ProfilePage extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(14)),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => _confirmDeleteAccount(context, ref),
+              icon: const Icon(Icons.delete_forever_rounded),
+              label: const Text('Borrar cuenta y datos'),
+              style: TextButton.styleFrom(
+                foregroundColor: c.error,
+                minimumSize: const Size.fromHeight(44),
+              ),
+            ),
+            const SizedBox(height: 8),
             Center(
               child: Text('Kinea · v0.1.0',
                   style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
@@ -221,5 +242,131 @@ class _OfflineSectionState extends ConsumerState<_OfflineSection> {
           ]),
         ),
     ]);
+  }
+}
+
+// ───────────── Borrado de cuenta ─────────────
+
+/// Diálogo que pide la contraseña y borra la cuenta.
+///
+/// La contraseña NO es decorativa: se re-autentica con ella y eso la verifica
+/// de verdad. Sin contraseña correcta, no se borra nada.
+class _DeleteAccountDialog extends ConsumerStatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  ConsumerState<_DeleteAccountDialog> createState() =>
+      _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
+  final _pass = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _pass.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    // Se captura ANTES de cualquier await: después, el diálogo puede estar
+    // desmontado y `ScaffoldMessenger.of(context)` fallaría.
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    // 1. Verificar la contraseña. Si falla, el error sale AQUÍ, en el diálogo.
+    try {
+      await ref.read(verifyPasswordProvider)(_pass.text);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e is StateError
+            ? e.message.toString()
+            : 'No se pudo verificar la contraseña.';
+      });
+      return;
+    }
+
+    // 2. Contraseña correcta: se cierra el diálogo y la app queda tapada por el
+    //    loader, que se mantiene hasta que el router cambia al login. Así no se
+    //    ve ni un frame de la pantalla normal.
+    ref.read(deletingAccountProvider.notifier).state = true;
+    if (mounted) Navigator.of(context).pop();
+
+    try {
+      await ref.read(deleteAccountProvider)();
+    } catch (e) {
+      ref.read(deletingAccountProvider.notifier).state = false;
+      messenger.showSnackBar(SnackBar(
+        content: Text('No se pudo borrar la cuenta: $e'),
+        duration: const Duration(seconds: 8),
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+
+    return AlertDialog(
+      // Con el teclado abierto queda poco alto. `scrollable` hace que el
+      // contenido se desplace en vez de aplastar los botones contra el campo.
+      scrollable: true,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      icon: Icon(Icons.warning_amber_rounded, color: c.error, size: 36),
+      title: const Text('Borrar cuenta'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Se borrarán TU CUENTA y TODOS tus datos: historial, racha, '
+            'progreso, amigos y foto de perfil. Esta acción no se puede '
+            'deshacer.',
+          ),
+          const SizedBox(height: 16),
+          const Text('Escribe tu contraseña para confirmar:'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _pass,
+            obscureText: true,
+            autofocus: true,
+            enabled: !_busy,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_busy) _submit();
+            },
+            decoration: InputDecoration(
+              labelText: 'Contraseña',
+              prefixIcon: const Icon(Icons.lock_outline),
+              errorText: _error,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: c.error),
+          onPressed: _busy ? null : _submit,
+          child: _busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Borrar'),
+        ),
+      ],
+    );
   }
 }

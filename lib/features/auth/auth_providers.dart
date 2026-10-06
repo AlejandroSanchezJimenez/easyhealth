@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -188,4 +189,52 @@ final removeProfilePhotoProvider = Provider((ref) => () async {
         }
       }
       await _writePhotoUrl(ref, uid, null);
+    });
+
+/// `true` mientras se está borrando la cuenta.
+///
+/// La app pinta encima un loader a pantalla completa para que NO se vea ni un
+/// frame de la pantalla normal mientras el router cambia al login.
+final deletingAccountProvider = StateProvider<bool>((ref) => false);
+
+/// Verifica la contraseña re-autenticando.
+///
+/// No es una comprobación de adorno: `reauthenticateWithCredential` la valida
+/// de verdad contra Firebase Auth. Lanza [StateError] con un mensaje listo
+/// para enseñar.
+final verifyPasswordProvider = Provider((ref) => (String password) async {
+      final user = ref.read(firebaseAuthProvider).currentUser;
+      if (user == null) throw StateError('No hay sesión abierta.');
+
+      final email = user.email;
+      if (email == null) {
+        throw StateError('Esta cuenta no tiene email; no se puede confirmar.');
+      }
+      if (password.isEmpty) throw StateError('Escribe tu contraseña.');
+
+      try {
+        await user.reauthenticateWithCredential(
+          EmailAuthProvider.credential(email: email, password: password),
+        );
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+          throw StateError('Contraseña incorrecta.');
+        }
+        if (e.code == 'too-many-requests') {
+          throw StateError('Demasiados intentos. Espera un momento.');
+        }
+        rethrow;
+      }
+    });
+
+/// Borra MI cuenta y TODOS mis datos.
+///
+/// Llama SOLO después de [verifyPasswordProvider]: aquí ya no se comprueba la
+/// contraseña, solo se pide al servidor que borre y se cierra la sesión local.
+///
+/// Por qué en el servidor: el cliente tiene prohibido tocar su historial,
+/// `progress`, `streak` y `userStreaks`, y no puede borrarse la cuenta de Auth.
+final deleteAccountProvider = Provider((ref) => () async {
+      await ref.read(functionsProvider).httpsCallable('deleteMyAccount').call();
+      await ref.read(firebaseAuthProvider).signOut();
     });

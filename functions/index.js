@@ -21,6 +21,7 @@
  */
 const admin = require("firebase-admin");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { logger } = require("firebase-functions/logger");
 const { computeStats } = require("./streak_stats");
 
@@ -85,5 +86,86 @@ exports.onSessionWritten = onDocumentWritten(
       logger.error(`no se pudo recalcular la racha de ${uid}`, e);
       throw e; // para que reintente
     }
+  },
+);
+
+// ───────────────────────── Borrado de cuenta (RGPD) ─────────────────────────
+
+/// Bucket por defecto del proyecto. Se fija a mano porque el nombre nuevo
+/// (`<proyecto>.firebasestorage.app`) no siempre coincide con el que el Admin
+/// SDK deduce solo (`<proyecto>.appspot.com`).
+const STORAGE_BUCKET = "easyhealth-96183.firebasestorage.app";
+
+/**
+ * Borra la cuenta de quien llama y TODOS sus datos.
+ *
+ * Por qué en el servidor: las reglas del cliente prohíben borrar el historial,
+ * `progress`, `streak` y `userStreaks` (están puestos como `allow write: if
+ * false`), y nadie puede borrarse su propia cuenta de Auth desde el cliente sin
+ * volver a autenticarse. El Admin SDK ignora todo eso.
+ *
+ * La contraseña NO se comprueba aquí: el cliente se re-autentica ANTES de
+ * llamar, y eso es lo que verifica la contraseña. Aun así, un cliente
+ * malicioso solo podría borrar SU PROPIA cuenta (el uid sale del token), así
+ * que no hay riesgo.
+ */
+exports.deleteMyAccount = onCall(
+  { region: "europe-west3" },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Tienes que iniciar sesión.");
+    }
+
+    // 1. Vínculos espejo en las listas de mis amigos, para no dejar
+    //    referencias a una cuenta que ya no existe.
+    const myLinks = await db
+      .collection("users")
+      .doc(uid)
+      .collection("friends")
+      .get();
+    await Promise.all(
+      myLinks.docs.map((d) =>
+        db
+          .collection("users")
+          .doc(d.id)
+          .collection("friends")
+          .doc(uid)
+          .delete()
+          .catch(() => {}),
+      ),
+    );
+
+    // 2. Códigos de invitación que apunten a mí.
+    const codes = await db
+      .collection("inviteCodes")
+      .where("uid", "==", uid)
+      .get();
+    await Promise.all(codes.docs.map((d) => d.ref.delete().catch(() => {})));
+
+    // 3. Datos públicos.
+    await db.collection("userProfiles").doc(uid).delete().catch(() => {});
+    await db.collection("userStreaks").doc(uid).delete().catch(() => {});
+
+    // 4. Mi documento y TODAS sus subcolecciones (history, friends, progress,
+    //    streak) de una sola pasada.
+    await db.recursiveDelete(db.collection("users").doc(uid));
+
+    // 5. Foto de perfil en Storage.
+    try {
+      await admin
+        .storage()
+        .bucket(STORAGE_BUCKET)
+        .deleteFiles({ prefix: `users/${uid}/` });
+    } catch (e) {
+      logger.warn(`no se pudieron borrar los archivos de ${uid}`, e);
+    }
+
+    // 6. La cuenta de Auth, AL FINAL: si algo falla antes, la cuenta sigue
+    //    existiendo y el usuario puede reintentarlo.
+    await admin.auth().deleteUser(uid);
+
+    logger.info(`cuenta borrada: ${uid}`);
+    return { ok: true };
   },
 );
