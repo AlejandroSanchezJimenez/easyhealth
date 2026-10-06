@@ -1,4 +1,4 @@
-# kinea
+# kineo
 
 A new Flutter project.
 

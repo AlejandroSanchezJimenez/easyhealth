@@ -25,7 +25,7 @@ class NotificationService {
   static const timeZoneName = 'Europe/Madrid';
 
   /// Android 8+ obliga a declarar un canal; el mismo sirve para los avisos.
-  static const channelId = 'kinea_diario';
+  static const channelId = 'kineo_diario';
   static const channelName = 'Recordatorios';
   static const channelDescription =
       'Recordatorios del entrenamiento diario y de la racha.';
@@ -44,17 +44,17 @@ class NotificationService {
     final r = reminders[index];
     return switch (r.hour) {
       11 => (
-          title: 'Kinea',
+          title: 'Kineo',
           body: 'Recuerda hacer tu ejercicio diario. Ya llevas una racha de '
               '$streak ${streak == 1 ? 'día' : 'días'}.',
         ),
       15 => (
-          title: 'Kinea',
+          title: 'Kineo',
           body: 'El ejercicio te facilita el movimiento y te ayuda. '
               'No lo dejes pasar.',
         ),
       20 => (
-          title: 'Kinea',
+          title: 'Kineo',
           body: 'Aún no has entrenado hoy. A estas horas ya debería estar hecho, '
               'y tu cuerpo te lo va a agradecer.',
         ),

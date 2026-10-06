@@ -2,7 +2,7 @@
     <!-- Notificaciones locales: obligatorio a partir de Android 13 (API 33). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="Kinea"
+        android:label="Kineo"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- google_mobile_ads: sin esto el SDK no inicializa. -->

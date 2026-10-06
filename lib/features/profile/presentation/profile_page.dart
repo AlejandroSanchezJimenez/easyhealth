@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors_ext.dart';
+// import '../../../app/theme/app_colors_ext.dart'; // solo lo usaba "Contenido sin conexión"
 import '../../../core/profile/profile_photo_picker.dart';
 import '../../../shared/widgets/info_chip.dart';
 import '../../../shared/widgets/user_avatar.dart';
@@ -10,7 +10,7 @@ import '../../auth/auth_providers.dart';
 import '../../auth/domain/app_user.dart';
 import '../../diseases/diseases_providers.dart';
 import '../../diseases/selected_disease_provider.dart';
-import '../../videos/videos_providers.dart';
+// import '../../videos/videos_providers.dart'; // solo lo usaba "Contenido sin conexión"
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -26,7 +26,7 @@ class ProfilePage extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cerrar sesión'),
-        content: const Text('¿Seguro que quieres salir de Kinea?'),
+        content: const Text('¿Seguro que quieres salir de Kineo?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -139,7 +139,10 @@ class ProfilePage extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            const _OfflineSection(),
+            // "Contenido sin conexión" desactivado: se queda para versiones
+            // más adelantadas. Al reactivarlo, descomenta también los imports
+            // `app_colors_ext.dart` y `videos_providers.dart` de arriba.
+            // const _OfflineSection(),
             const SizedBox(height: 24),
 
             OutlinedButton.icon(
@@ -166,7 +169,7 @@ class ProfilePage extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Center(
-              child: Text('Kinea · v0.1.0',
+              child: Text('Kineo · v0.1.0',
                   style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
             ),
           ]),
@@ -175,6 +178,9 @@ class ProfilePage extends ConsumerWidget {
 }
 
 // ───────────── Contenido sin conexión ─────────────
+// DESACTIVADO a propósito: se queda para versiones más adelantadas.
+// Va en un comentario de bloque para no dejar avisos de "elemento sin usar".
+/*
 class _OfflineSection extends ConsumerStatefulWidget {
   const _OfflineSection();
   @override
@@ -244,6 +250,7 @@ class _OfflineSectionState extends ConsumerState<_OfflineSection> {
     ]);
   }
 }
+*/
 
 // ───────────── Borrado de cuenta ─────────────
 

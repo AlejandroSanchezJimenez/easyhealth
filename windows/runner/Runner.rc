@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "es.asanjim" "\0"
-            VALUE "FileDescription", "kinea" "\0"
+            VALUE "FileDescription", "kineo" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "kinea" "\0"
+            VALUE "InternalName", "kineo" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 es.asanjim. All rights reserved." "\0"
-            VALUE "OriginalFilename", "kinea.exe" "\0"
-            VALUE "ProductName", "kinea" "\0"
+            VALUE "OriginalFilename", "kineo.exe" "\0"
+            VALUE "ProductName", "kineo" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

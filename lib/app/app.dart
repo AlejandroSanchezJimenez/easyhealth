@@ -29,7 +29,7 @@ class App extends ConsumerWidget {
     final signedIn = ref.watch(currentUserProvider) != null;
 
     return MaterialApp.router(
-      title: 'Kinea',
+      title: 'Kineo',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
