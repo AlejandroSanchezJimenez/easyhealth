@@ -1,0 +1,71 @@
+rules_version = '2';
+
+// Reglas NUEVAS para la pantalla de Amigos. MÉTELAS dentro de
+// `service cloud.firestore { match /databases/{database}/documents { ... } }`
+// y concédelas prioridad sobre tus reglas actuales si entran en conflicto.
+//
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │ 1. Resumen público de racha (lo escribe la Cloud Function)           │
+// └──────────────────────────────────────────────────────────────────────┘
+match /userStreaks/{uid} {
+  // Cualquier autenticado puede ver la racha de quien sea. El documento es
+  // un RESUMEN (4 números + una fecha), no el historial: no filtra qué
+  // entrenó ni cuántos segundos.
+  allow read: if signedIn();
+
+  // Nadie desde el cliente. Solo el Admin SDK de la Cloud Function.
+  allow create, update, delete: if false;
+}
+
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │ 2. Códigos de invitación                                            │
+// └──────────────────────────────────────────────────────────────────────┘
+match /inviteCodes/{code} {
+  // Resolver UN código concreto (el que teclea tu amigo).
+  allow get: if signedIn();
+
+  // Listar, solo para devolver documentos propios. Así el cliente puede
+  // recuperar SU código, pero no enumerar los de los demás (ni sus uids).
+  allow list: if signedIn() && resource.data.uid == request.auth.uid;
+
+  allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+
+  allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+}
+
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │ 3. Vínculos de amistad (mutuos, con aceptación)                     │
+// └──────────────────────────────────────────────────────────────────────┘
+// Va DENTRO de `match /users/{uid} { ... }`, para que herede tus helpers
+// (signedIn, isOwner). Ponlo junto a `history`, `progress` y `streak`.
+match /friends/{friendId} {
+  allow read: if isOwner(uid);
+
+  // Cada quien crea su propio documento, declarándose el iniciador.
+  allow create: if isOwner(uid)
+    && request.resource.data.requestedBy == uid
+    && request.resource.data.status in ['pending', 'accepted']
+    && request.resource.data.keys().hasOnly(
+         ['status', 'requestedBy', 'displayName', 'photoUrl', 'createdAt']);
+
+  // Solo quien ENVIÓ la solicitud puede aceptarla, y solo puede tocar el
+  // estado y la fecha de aceptación. No puede reescribir requestedBy ni
+  // adjudicarse una amistad que no pidió.
+  allow update: if isOwner(uid)
+    && resource.data.requestedBy == request.auth.uid
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['status', 'acceptedAt', 'displayName', 'photoUrl']);
+
+  // Eliminar un vínculo: puedes borrar el tuyo o la copia que tienes en la
+  // lista del otro (friendId == tú). Sin esto, quitar a un amigo dejaría su
+  // copia huérfana en tu lista.
+  allow delete: if isOwner(uid) || friendId == request.auth.uid;
+}
+
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │ Nota: tus reglas actuales ya cubren esto                              │
+// └──────────────────────────────────────────────────────────────────────┘
+//   match /users/{uid}/history/{sessionId} { allow read: if isOwner(uid) ... }
+//
+// NO hay que tocarlo. La Cloud Function lee ese historial con el Admin SDK
+// (ignora las reglas), y es ella quien publica el resumen en /userStreaks.

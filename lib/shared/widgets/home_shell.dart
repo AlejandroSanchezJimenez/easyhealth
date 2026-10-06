@@ -25,6 +25,8 @@ class HomeShell extends StatelessWidget {
                 NavigationDestination(
                     icon: Icon(Icons.local_fire_department_outlined),
                     label: 'Progreso'),
+                NavigationDestination(
+                    icon: Icon(Icons.group_outlined), label: 'Amigos'),
                 NavigationDestination(icon: Icon(Icons.person_outline), label: 'Perfil'),
               ],
             ),

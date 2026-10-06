@@ -68,10 +68,11 @@ final uploadProfilePhotoProvider =
           final safeExt = ext.length <= 5 && RegExp(r'^[a-z0-9]+$').hasMatch(ext)
               ? ext
               : 'jpg';
-          // El prefijo 'users/' NO es opcional: las reglas de Storage declara
-          // `match /users/{uid}/{fileName}`. Sin él, la ruta <uid>/avatar.jpg
-          // no encaja en ninguna regla y cae en el deny por defecto.
-          final path = 'users/$uid/avatar.$safeExt';
+          // La ruta DEBE coincidir con las reglas de Storage, que declaran
+          // `match /users/{uid}/avatar/{fileName}`: son TRES segmentos
+          // (users / uid / avatar / nombre). Con dos, la escritura no encaja
+          // en ninguna regla y cae en el deny por defecto.
+          final path = 'users/$uid/avatar/profile.$safeExt';
 
           final storage = ref.read(storageProvider);
 
@@ -94,16 +95,48 @@ final uploadProfilePhotoProvider =
           );
           final url = await storageRef.getDownloadURL();
 
-          await ref
-              .read(firestoreProvider)
-              .collection(FirestorePaths.users)
-              .doc(uid)
-              .set({
-                'photoUrl': url,
-                'updatedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
+          await _writePhotoUrl(ref, uid, url);
           return url;
         });
+
+/// Escribe `photoUrl` en `users/{uid}`.
+///
+/// Son dos caminos porque tus reglas separan `create` de `update` y cada una
+/// exige campos distintos:
+///
+/// - `create` pide `email`, `createdAt`, `updatedAt` y prohíbe `role`.
+/// - `update` evalúa `request.resource.data.displayName`, y si el documento no
+///   tiene esa clave, ese acceso da ERROR y deniega la escritura entera.
+///
+/// Un `set(..., merge: true)` a secas no garantiza ninguna de las dos cosas:
+/// si el documento no existe, `merge` degrada en un `create` sin `email`.
+Future<void> _writePhotoUrl(Ref ref, String uid, String? photoUrl) async {
+  final auth = ref.read(firebaseAuthProvider);
+  final doc =
+      ref.read(firestoreProvider).collection(FirestorePaths.users).doc(uid);
+  final snap = await doc.get();
+  final data = snap.data();
+
+  if (!snap.exists) {
+    // Alta: se rellena todo lo que la regla de create exige.
+    await doc.set({
+      'email': auth.currentUser?.email,
+      'displayName': auth.currentUser?.displayName,
+      'photoUrl': photoUrl,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return;
+  }
+
+  // Edición: `displayName` se reenvía aunque no cambie, para que la clave
+  // exista siempre y la regla pueda evaluarla sin error.
+  await doc.set({
+    'displayName': data?['displayName'],
+    'photoUrl': photoUrl,
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
 
 /// Borra la foto de Storage y limpia el campo del documento.
 final removeProfilePhotoProvider = Provider((ref) => () async {
@@ -118,10 +151,5 @@ final removeProfilePhotoProvider = Provider((ref) => () async {
           // Si el objeto ya no existe, se sigue limpiando el documento.
         }
       }
-      await ref
-          .read(firestoreProvider)
-          .collection(FirestorePaths.users)
-          .doc(uid)
-          .set({'photoUrl': null, 'updatedAt': FieldValue.serverTimestamp()},
-              SetOptions(merge: true));
+      await _writePhotoUrl(ref, uid, null);
     });

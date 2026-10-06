@@ -53,12 +53,15 @@ class ProfilePage extends ConsumerWidget {
         : (user?.email?.split('@').first ?? 'Usuario');
 
     final selectedId = ref.watch(selectedDiseaseIdProvider);
-    final diseaseName = ref
-        .watch(diseasesProvider)
-        .valueOrNull
-        ?.where((d) => d.id == selectedId)
-        .firstOrNull
-        ?.name;
+    final isGeneral = selectedId == kGeneralTrainingId;
+    final diseaseName = isGeneral
+        ? kGeneralTrainingProfileLabel
+        : ref
+                .watch(diseasesProvider)
+                .valueOrNull
+                ?.where((d) => d.id == selectedId)
+                .firstOrNull
+                ?.name;
 
     return SafeArea(
       child: ListView(
@@ -105,10 +108,17 @@ class ProfilePage extends ConsumerWidget {
               child: Column(children: [
                 ListTile(
                   leading: const Icon(Icons.healing_rounded),
-                  title: const Text('Mi enfermedad'),
+                  title: const Text('Mi condición'),
                   subtitle: Text(diseaseName ?? 'Sin seleccionar'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.go('/explore'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.group_outlined),
+                  title: const Text('Amigos'),
+                  subtitle: const Text('Gestiona tus vínculos y tu código'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/friends'),
                 ),
                 if (user?.role.canManageContent ?? false) ...[
                   Divider(height: 1, color: c.outlineVariant),

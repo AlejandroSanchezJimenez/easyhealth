@@ -239,7 +239,7 @@ class _DailyCard extends ConsumerWidget {
           child: Column(children: [
             Icon(Icons.healing_rounded, size: 40, color: c.primary),
             const SizedBox(height: 10),
-            Text('Elige tu enfermedad',
+            Text('Elige tu condición',
                 style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text('Así podremos prepararte un entrenamiento cada día.',
@@ -249,20 +249,22 @@ class _DailyCard extends ConsumerWidget {
             FilledButton.tonal(
               onPressed: () => context.go('/explore'),
               style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
-              child: const Text('Explorar enfermedades'),
+              child: const Text('Explorar condiciones'),
             ),
           ]),
         ),
       );
     }
 
-    final diseaseName = ref
-            .watch(diseasesProvider)
-            .valueOrNull
-            ?.where((d) => d.id == diseaseId)
-            .firstOrNull
-            ?.name ??
-        '';
+    final diseaseName = diseaseId == kGeneralTrainingId
+        ? kGeneralTrainingLabel
+        : ref
+                .watch(diseasesProvider)
+                .valueOrNull
+                ?.where((d) => d.id == diseaseId)
+                .firstOrNull
+                ?.name ??
+            '';
     final daily = ref.watch(dailyPickProvider(diseaseId));
     final today = dateKey(DateTime.now());
     final doneToday = (ref.watch(sessionsProvider).valueOrNull ?? const [])
@@ -299,7 +301,7 @@ class _DailyCard extends ConsumerWidget {
             data: (pick) {
               if (pick == null) {
                 return Text(
-                    'Aún no hay clases con vídeo para esta enfermedad.',
+                    'Aún no hay clases con vídeo disponibles.',
                     style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant));
               }
               final done = doneToday.contains(pick.key);

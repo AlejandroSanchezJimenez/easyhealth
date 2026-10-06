@@ -47,3 +47,12 @@ app.*.map.json
 /node_modules/
 
 /service-account.json
+
+# Cloud Functions: dependencias y artefactos locales, nunca al repo
+functions/node_modules/
+functions/.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+*.local

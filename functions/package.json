@@ -1,0 +1,19 @@
+{
+  "name": "kinea-functions",
+  "description": "Resumen público de rachas para la pantalla de Amigos",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node streak_stats.test.js",
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^7.4.0"
+  }
+}

@@ -45,13 +45,13 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
               TextField(
                 onChanged: (v) => setState(() => _q = v.trim()),
                 decoration: const InputDecoration(
-                    hintText: 'Buscar enfermedades, ejercicios o clases',
+                    hintText: 'Buscar condiciones, ejercicios o clases',
                     prefixIcon: Icon(Icons.search)),
               ),
             ]),
           ),
           const TabBar(tabs: [
-            Tab(text: 'Enfermedades'),
+            Tab(text: 'Condiciones'),
             Tab(text: 'Ejercicios'),
             Tab(text: 'Clases')
           ]),
@@ -63,13 +63,14 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     );
   }
 
-  // ───────────── Enfermedades ─────────────
+  // ───────────── Condiciones ─────────────
   Widget _diseasesTab() {
     final exercises =
         ref.watch(exercisesProvider).valueOrNull ?? const <Exercise>[];
     final workouts =
         ref.watch(workoutsProvider).valueOrNull ?? const <Workout>[];
     final selected = ref.watch(selectedDiseaseIdProvider);
+    final isGeneral = selected == kGeneralTrainingId;
 
     return AsyncView(
       value: ref.watch(diseasesProvider),
@@ -80,42 +81,88 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                 _match(d.shortDescription) ||
                 _match(d.category ?? ''))
             .toList();
-        if (items.isEmpty) {
-          return const _Empty(
-              icon: Icons.healing_outlined,
-              text: 'No hay enfermedades disponibles');
-        }
-        return ListView.separated(
+
+        return ListView(
           padding: const EdgeInsets.all(20),
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (_, i) {
-            final d = items[i];
-            final nEx =
-                exercises.where((e) => e.diseaseIds.contains(d.id)).length;
-            final nWo =
-                workouts.where((w) => w.diseaseIds.contains(d.id)).length;
-            final isSel = d.id == selected;
-            return _ContentCard(
-              highlighted: isSel,
-              leading: _Thumb(url: d.imageUrl, icon: Icons.healing_rounded),
-              title: d.name,
-              subtitle: d.shortDescription,
+          children: [
+            // Entrenamiento general: opción aparte, fuera de las condiciones.
+            _ContentCard(
+              highlighted: isGeneral,
+              leading: const _Thumb(icon: Icons.all_inclusive_rounded),
+              title: kGeneralTrainingLabel,
+              subtitle:
+                  'Te aparecerán clases de cualquiera de las condiciones, '
+                  'sin filtrar por ninguna en concreto.',
               chips: [
-                if (isSel)
+                if (isGeneral)
                   InfoChip(
-                      label: 'Seleccionada',
+                      label: 'Seleccionado',
                       icon: Icons.check_circle,
                       color: Theme.of(context).colorScheme.primary),
-                InfoChip(label: '$nEx ejercicios', icon: Icons.fitness_center),
-                InfoChip(label: '$nWo clases', icon: Icons.class_outlined),
               ],
-              onTap: () => _showDisease(d, nEx, nWo, isSel),
-            );
-          },
+              onTap: _selectGeneralTraining,
+            ),
+            const SizedBox(height: 24),
+            Text('Condiciones',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            if (items.isEmpty)
+              const _Empty(
+                  icon: Icons.healing_outlined,
+                  text: 'No hay condiciones disponibles')
+            else
+              for (final d in items) ...[
+                _ContentCard(
+                  highlighted: d.id == selected,
+                  leading: _Thumb(url: d.imageUrl, icon: Icons.healing_rounded),
+                  title: d.name,
+                  subtitle: d.shortDescription,
+                  chips: [
+                    if (d.id == selected)
+                      InfoChip(
+                          label: 'Seleccionada',
+                          icon: Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary),
+                    InfoChip(
+                        label:
+                            '${exercises.where((e) => e.diseaseIds.contains(d.id)).length} ejercicios',
+                        icon: Icons.fitness_center),
+                    InfoChip(
+                        label:
+                            '${workouts.where((w) => w.diseaseIds.contains(d.id)).length} clases',
+                        icon: Icons.class_outlined),
+                  ],
+                  onTap: () => _showDisease(
+                    d,
+                    exercises.where((e) => e.diseaseIds.contains(d.id)).length,
+                    workouts.where((w) => w.diseaseIds.contains(d.id)).length,
+                    d.id == selected,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+          ],
         );
       },
     );
+  }
+
+  /// Selecciona el entrenamiento general y explica qué implica.
+  void _selectGeneralTraining() {
+    ref
+        .read(selectedDiseaseIdProvider.notifier)
+        .select(kGeneralTrainingId);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text(
+            'Si te apuntas a este entrenamiento, te aparecerán clases de '
+            'cualquiera de las condiciones'),
+        duration: Duration(seconds: 5),
+      ));
   }
 
   void _showDisease(Disease d, int nEx, int nWo, bool isSel) {
@@ -144,7 +191,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                 ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Ahora entrenas para: ${d.name}')));
               },
-        child: Text(isSel ? 'Enfermedad seleccionada' : 'Usar esta enfermedad'),
+        child: Text(isSel ? 'Condición seleccionada' : 'Usar esta condición'),
       ),
     ]));
   }
@@ -161,7 +208,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             final items = list
                 .where((e) => _match(e.name) || _match(e.description))
                 .where((e) =>
-                    !_onlyMine || sel == null || e.diseaseIds.contains(sel))
+                    !_onlyMine || matchesCondition(e.diseaseIds, sel))
                 .toList();
             if (items.isEmpty) {
               return const _Empty(
@@ -285,7 +332,7 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             final items = list
                 .where((w) => _match(w.name) || _match(w.description))
                 .where((w) =>
-                    !_onlyMine || sel == null || w.diseaseIds.contains(sel))
+                    !_onlyMine || matchesCondition(w.diseaseIds, sel))
                 .toList();
             if (items.isEmpty) {
               return const _Empty(
@@ -508,13 +555,26 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   // ───────────── Utilidades ─────────────
   Widget _filterRow(String? sel) {
     if (sel == null) return const SizedBox.shrink();
+    // Con entrenamiento general no hay condición que filtrar.
+    if (sel == kGeneralTrainingId) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: InfoChip(
+            label: kGeneralTrainingLabel,
+            icon: Icons.all_inclusive_rounded,
+          ),
+        ),
+      );
+    }
     final name = ref
             .watch(diseasesProvider)
             .valueOrNull
             ?.where((d) => d.id == sel)
             .firstOrNull
             ?.name ??
-        'mi enfermedad';
+        'mi condición';
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
       child: Align(

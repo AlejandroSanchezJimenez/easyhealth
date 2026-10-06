@@ -1,4 +1,4 @@
-/// El entrenamiento del día: una clase de la enfermedad elegida.
+/// El entrenamiento del día: una clase de la condición elegida.
 /// Siempre tiene al menos un vídeo; si la clase no tiene vídeo propio, se
 /// encadenan los vídeos de sus ejercicios.
 class DailyPick {

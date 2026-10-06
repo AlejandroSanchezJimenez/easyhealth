@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/auth_providers.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/diseases/presentation/explore_page.dart';
+import '../features/friends/presentation/friends_page.dart';
+import '../features/friends/presentation/manage_friends_page.dart';
 import '../features/profile/presentation/profile_page.dart';
 import '../features/streak/presentation/home_page.dart';
 import '../features/streak/presentation/progress_page.dart';
@@ -93,6 +95,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/progress', builder: (_, __) => const ProgressPage())
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/friends',
+              builder: (_, __) => const FriendsPage(),
+              routes: [
+                GoRoute(
+                    path: 'manage',
+                    builder: (_, __) => const ManageFriendsPage()),
+              ],
+            )
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/profile', builder: (_, __) => const ProfilePage())

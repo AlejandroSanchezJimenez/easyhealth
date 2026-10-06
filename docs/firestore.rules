@@ -1,0 +1,310 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────────── Helpers ─────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // El rol viene de Custom Claims (token firmado).
+    function role() {
+      return signedIn() && ('role' in request.auth.token)
+        ? request.auth.token.role
+        : 'user';
+    }
+
+    function isAdmin() {
+      return role() == 'admin';
+    }
+
+    function isTeacher() {
+      return role() == 'teacher' || role() == 'admin';
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isNullOrString(v) {
+      return v == null || v is string;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════
+    //  NUEVO — Amigos: resumen público de racha
+    // ══════════════════════════════════════════════════════════════
+    // Lo ESCRIBE la Cloud Function (onSessionWritten) con el Admin SDK,
+    // que ignora estas reglas. El cliente solo lee.
+    //
+    // Es un RESUMEN (4 números + una fecha), no el historial: no filtra
+    // qué entrenó ni cuántos segundos.
+    match /userStreaks/{uid} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════
+    //  NUEVO — Códigos de invitación
+    // ══════════════════════════════════════════════════════════════
+    // OJO: va en el NIVEL RAÍZ (hermano de `match /users/{uid}`),
+    // NO dentro de `match /users/{uid}`. Si se anida, la ruta real sería
+    // /users/{uid}/inviteCodes/{code} y la app no podría resolver códigos.
+    match /inviteCodes/{code} {
+      // Resolver UN código concreto (el que teclea tu amigo).
+      allow get: if signedIn();
+
+      // Listar, pero SOLO devolviendo documentos propios. Así la app puede
+      // recuperar TU código, pero no enumerar los de los demás (ni sus uids).
+      allow list: if signedIn() && resource.data.uid == request.auth.uid;
+
+      // Solo puedes crear códigos que apunten a TI.
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid;
+
+      allow update, delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+
+    // ───────────── Usuarios ─────────────
+    match /users/{uid} {
+
+      // Solo el propio usuario o admin.
+      allow read: if isOwner(uid) || isAdmin();
+
+      // Alta del usuario.
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(
+          ['email', 'displayName', 'photoUrl', 'createdAt', 'updatedAt']
+        )
+        && request.resource.data.email == request.auth.token.email
+        && isNullOrString(request.resource.data.displayName)
+        && isNullOrString(request.resource.data.get('photoUrl', null))
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // Edición del perfil.
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'photoUrl', 'updatedAt'])
+        && isNullOrString(
+          request.resource.data.get('displayName', null)
+        )
+        && request.resource.data.updatedAt == request.time;
+
+      // El borrado se hace desde Cloud Functions.
+      allow delete: if false;
+
+
+      // ───────────── Historial ─────────────
+      match /history/{sessionId} {
+
+        allow read: if isOwner(uid) || isAdmin();
+
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(
+            ['dateKey', 'kind', 'refId', 'seconds', 'completedAt']
+          )
+          && request.resource.data.dateKey is string
+          && request.resource.data.dateKey.matches(
+            '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          )
+          && request.resource.data.kind in [
+            'exercise',
+            'workout',
+            'daily'
+          ]
+          && request.resource.data.refId is string
+          && request.resource.data.refId.size() > 0
+          && request.resource.data.seconds is int
+          && request.resource.data.seconds > 0
+          && request.resource.data.seconds <= 86400
+          && request.resource.data.completedAt is timestamp
+          && request.resource.data.completedAt
+             <= request.time + duration.value(1, 'd');
+
+        // Reintento idempotente.
+        allow update: if isOwner(uid)
+          && request.resource.data == resource.data;
+
+        allow delete: if false;
+      }
+
+
+      // ══════════════════════════════════════════════════════════════
+      //  NUEVO — Vínculos de amistad (mutuos, con aceptación)
+      // ══════════════════════════════════════════════════════════════
+      // Va DENTRO de `match /users/{uid}` para heredar isOwner(uid).
+      // Ruta real: /users/{uid}/friends/{friendId}
+      //
+      // Cada vínculo existe DOS veces (espejo): en la lista de A y en la de B.
+      // Al añadir, A escribe ambos en `pending`. Quien acepta los pasa a
+      // `accepted` en ambos.
+      match /friends/{friendId} {
+
+        allow read: if isOwner(uid);
+
+        // Cada quien crea documentos declarándose el iniciador.
+        // OJO: `requestedBy == request.auth.uid` (NO == uid). A escribe el
+        // espejo en la lista de B, así que el iniciador es A pero el dueño
+        // del documento es B. Con `== uid` el espejo nunca podría crearse.
+        allow create: if isOwner(uid)
+          && request.resource.data.requestedBy == request.auth.uid
+          && request.resource.data.status in ['pending', 'accepted']
+          && request.resource.data.keys().hasOnly(
+               ['status', 'requestedBy', 'displayName', 'photoUrl', 'createdAt']);
+
+        // Aceptar: puede hacerlo quien ENVIÓ la solicitud o quien la RECIBIÓ
+        // (friendId == tú significa "este documento de mi lista habla de mí").
+        // Con `requestedBy == request.auth.uid` solo, el receptor nunca podría
+        // aceptar, porque en SU documento el iniciador es el otro.
+        //
+        // Solo se puede pasar a 'accepted' y tocar estado/fecha/nombre/foto.
+        // No se puede reescribir requestedBy ni adjudicarse una ajena.
+        allow update: if isOwner(uid)
+          && (resource.data.requestedBy == request.auth.uid
+              || friendId == request.auth.uid)
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'acceptedAt', 'displayName', 'photoUrl']);
+
+        // Eliminar un vínculo: puedes borrar el tuyo o la copia que tienes en
+        // la lista del otro (friendId == tú). Sin esto, quitar a un amigo
+        // dejaría su copia huérfana en tu lista.
+        allow delete: if isOwner(uid) || friendId == request.auth.uid;
+      }
+
+
+      // ───────────── Progreso ─────────────
+      match /progress/{docId} {
+
+        allow read: if isOwner(uid) || isAdmin();
+
+        // Solo Cloud Functions.
+        allow write: if false;
+      }
+
+
+      // ───────────── Racha ─────────────
+      match /streak/{docId} {
+
+        allow read: if isOwner(uid) || isAdmin();
+
+        // Solo Cloud Functions.
+        allow write: if false;
+      }
+    }
+
+
+    // ───────────── Contenido ─────────────
+
+    function validStatus(d) {
+      return d.status in [
+        'draft',
+        'published',
+        'archived'
+      ];
+    }
+
+    // Maestro: solo contenido creado por él.
+    // Admin: todo.
+    function canManage(d) {
+      return isAdmin()
+        || (isTeacher() && d.createdBy == request.auth.uid);
+    }
+
+    function canCreateContent() {
+      return isTeacher()
+        && validStatus(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.version == 1
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function canUpdateContent() {
+      return canManage(resource.data)
+        && validStatus(request.resource.data)
+
+        // No se puede cambiar el creador.
+        && request.resource.data.createdBy == resource.data.createdBy
+
+        // No se puede cambiar la fecha de creación.
+        && request.resource.data.createdAt == resource.data.createdAt
+
+        // La versión aumenta exactamente en 1.
+        && request.resource.data.version
+           == resource.data.version + 1
+
+        // Fecha de actualización del servidor.
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // Usuarios autenticados:
+    // - published: todos
+    // - draft/archived: maestros y admin
+    function canReadContent() {
+      return signedIn()
+        && (
+          resource.data.status == 'published'
+          || isTeacher()
+        );
+    }
+
+
+    // ───────────── Enfermedades ─────────────
+    match /diseases/{id} {
+
+      allow read: if canReadContent();
+
+      allow create: if canCreateContent();
+
+      allow update: if canUpdateContent();
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ───────────── Ejercicios ─────────────
+    match /exercises/{id} {
+
+      allow read: if canReadContent();
+
+      allow create: if canCreateContent();
+
+      allow update: if canUpdateContent();
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ───────────── Clases / Workouts ─────────────
+    match /workouts/{id} {
+
+      allow read: if canReadContent();
+
+      allow create: if canCreateContent();
+
+      allow update: if canUpdateContent();
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ───────────── Vídeos ─────────────
+    match /videos/{id} {
+
+      // Cualquier usuario autenticado puede leer vídeos.
+      allow read: if signedIn();
+
+      // Maestros y administradores pueden gestionar vídeos.
+      allow create, update, delete: if isTeacher();
+    }
+
+
+    // Todo lo demás queda denegado.
+  }
+}

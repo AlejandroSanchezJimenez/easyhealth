@@ -6,6 +6,7 @@ import '../../core/providers.dart';
 import '../../core/utils/date_key.dart';
 import '../../shared/data/content_repository.dart';
 import '../auth/auth_providers.dart';
+import '../diseases/selected_disease_provider.dart';
 import '../exercises/exercises_providers.dart';
 import '../streak/streak_providers.dart';
 import 'domain/daily_pick.dart';
@@ -30,7 +31,8 @@ final allWorkoutsProvider = StreamProvider<List<Workout>>((ref) {
   return ref.watch(workoutRemoteProvider).watchAll();
 });
 
-/// Entrenamiento del día: UNA clase aleatoria de la enfermedad elegida.
+/// Entrenamiento del día: UNA clase aleatoria de la condición elegida.
+/// Con entrenamiento general ([kGeneralTrainingId]) sortea entre todas.
 /// Si la clase no tiene vídeo propio, se concatenan los vídeos de sus ejercicios.
 /// Determinista por (usuario, enfermedad, fecha): no cambia al reconstruir la pantalla.
 final dailyPickProvider =
@@ -57,11 +59,12 @@ final dailyPickProvider =
 
   final exercisesById = {for (final e in exercises) e.id: e};
 
-  // Solo clases de la enfermedad. Cada una necesita vídeo propio o, si no tiene,
-  // al menos un ejercicio con vídeo: sin vídeo no hay forma de completarla.
+  // Solo clases de la condición elegida (o de todas, con entrenamiento
+  // general). Cada una necesita vídeo propio o, si no tiene, al menos un
+  // ejercicio con vídeo: sin vídeo no hay forma de completarla.
   final candidates = <String, DailyPick>{};
   for (final w in workouts) {
-    if (!w.diseaseIds.contains(diseaseId)) continue;
+    if (!matchesCondition(w.diseaseIds, diseaseId)) continue;
 
     if (w.videoId != null) {
       candidates['workout:${w.id}'] = DailyPick(
