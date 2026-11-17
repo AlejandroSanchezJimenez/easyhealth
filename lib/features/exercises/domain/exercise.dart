@@ -18,6 +18,7 @@ class Exercise implements ContentEntity {
     this.benefits = const [],
     this.precautions = const [],
     this.contraindications = const [],
+    this.recommendedStage, // Nueva: etapa recomendada para este ejercicio
     this.status = ContentStatus.draft,
     this.version = 1,
     this.updatedAt,
@@ -34,6 +35,7 @@ class Exercise implements ContentEntity {
   @override
   final int version;
   final DateTime? updatedAt;
+  final String? recommendedStage; // Nuevo: etapa recomendada para el ejercicio
 
   factory Exercise.fromMap(String id, Map<String, dynamic> m) => Exercise(
         id: id,
@@ -51,6 +53,7 @@ class Exercise implements ContentEntity {
         benefits: readStrings(m['benefits']),
         precautions: readStrings(m['precautions']),
         contraindications: readStrings(m['contraindications']),
+        recommendedStage: m['recommendedStage'] as String?, // Nuevo campo desde Firestore
         status: ContentStatus.parse(m['status'] as String?),
         version: (m['version'] as num?)?.toInt() ?? 1,
         updatedAt: readDate(m['updatedAt']),
@@ -71,6 +74,7 @@ class Exercise implements ContentEntity {
         'benefits': benefits,
         'precautions': precautions,
         'contraindications': contraindications,
+        'recommendedStage': recommendedStage, // Guardar recomendado en Firestore
         'status': status.name,
       };
 }

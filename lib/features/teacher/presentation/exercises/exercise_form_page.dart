@@ -11,6 +11,7 @@ import '../../../../shared/models/content_status.dart';
 import '../../../../shared/widgets/async_view.dart';
 import '../../../auth/auth_providers.dart';
 import '../../../diseases/diseases_providers.dart';
+import '../../../diseases/selected_disease_provider.dart';
 import '../../../exercises/domain/exercise.dart';
 import '../../../exercises/exercises_providers.dart';
 import '../../../videos/domain/video_meta.dart';
@@ -39,6 +40,7 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
   final _diseaseQuery = TextEditingController();
   final Set<String> _diseaseIds = {};
 
+  String? _recommendedStage;
   String? _videoId;
   String? _videoLabel;
   File? _pendingVideo;
@@ -90,6 +92,7 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
       _diseaseIds
         ..clear()
         ..addAll(e.diseaseIds);
+      _recommendedStage = DiseaseStage.parse(e.recommendedStage)?.label;
       _videoId = e.videoId;
       _videoLabel = videoLabel;
     });
@@ -192,6 +195,7 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
               benefits: _lines(_benefits),
               precautions: _lines(_precautions),
               contraindications: _lines(_contraindications),
+              recommendedStage: _recommendedStage,
               status: _existing?.status ?? ContentStatus.draft,
             ),
             id: _existing?.id,
@@ -281,6 +285,26 @@ class _ExerciseFormPageState extends ConsumerState<ExerciseFormPage> {
               ),
             ),
           ]),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String?>(
+            value: _recommendedStage,
+            decoration: const InputDecoration(
+              labelText: 'Estadio recomendado (opcional)',
+              helperText: 'Si no eliges ninguno, servirá para todos los estadios.',
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Todos los estadios'),
+              ),
+              for (final stage in DiseaseStage.values)
+                DropdownMenuItem<String?>(
+                  value: stage.label,
+                  child: Text(stage.label),
+                ),
+            ],
+            onChanged: _busy ? null : (v) => setState(() => _recommendedStage = v),
+          ),
 
           // ── Enfermedades (multi-select) ──
           const SizedBox(height: 24),

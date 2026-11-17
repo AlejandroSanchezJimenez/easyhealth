@@ -23,6 +23,7 @@ class ExplorePage extends ConsumerStatefulWidget {
 class _ExplorePageState extends ConsumerState<ExplorePage> {
   String _q = '';
   bool _onlyMine = true;
+  bool _onlyMyStage = true;
 
   bool _match(String s) =>
       _q.isEmpty || s.toLowerCase().contains(_q.toLowerCase());
@@ -65,10 +66,6 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
 
   // ───────────── Condiciones ─────────────
   Widget _diseasesTab() {
-    final exercises =
-        ref.watch(exercisesProvider).valueOrNull ?? const <Exercise>[];
-    final workouts =
-        ref.watch(workoutsProvider).valueOrNull ?? const <Workout>[];
     final selected = ref.watch(selectedDiseaseIdProvider);
     final isGeneral = selected == kGeneralTrainingId;
 
@@ -128,17 +125,17 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                           color: Theme.of(context).colorScheme.primary),
                     InfoChip(
                         label:
-                            '${exercises.where((e) => e.diseaseIds.contains(d.id)).length} ejercicios',
+                            '${_exerciseCountForDisease(d.id)} ejercicios',
                         icon: Icons.fitness_center),
                     InfoChip(
                         label:
-                            '${workouts.where((w) => w.diseaseIds.contains(d.id)).length} clases',
+                            '${_workoutCountForDisease(d.id)} clases',
                         icon: Icons.class_outlined),
                   ],
                   onTap: () => _showDisease(
                     d,
-                    exercises.where((e) => e.diseaseIds.contains(d.id)).length,
-                    workouts.where((w) => w.diseaseIds.contains(d.id)).length,
+                    _exerciseCountForDisease(d.id),
+                    _workoutCountForDisease(d.id),
                     d.id == selected,
                   ),
                 ),
@@ -150,11 +147,22 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     );
   }
 
+  int _exerciseCountForDisease(String diseaseId) {
+    final exercises = ref.watch(exercisesProvider).valueOrNull ?? const <Exercise>[];
+    return exercises.where((e) => e.diseaseIds.contains(diseaseId)).length;
+  }
+
+  int _workoutCountForDisease(String diseaseId) {
+    final workouts = ref.watch(workoutsProvider).valueOrNull ?? const <Workout>[];
+    return workouts.where((w) => w.diseaseIds.contains(diseaseId)).length;
+  }
+
   /// Selecciona el entrenamiento general y explica qué implica.
   void _selectGeneralTraining() {
     ref
         .read(selectedDiseaseIdProvider.notifier)
         .select(kGeneralTrainingId);
+    ref.read(selectedDiseaseStageProvider.notifier).select(null);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(
@@ -165,50 +173,161 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
       ));
   }
 
+  /// Pregunta al usuario en qué estadio se encuentra su enfermedad.
+  /// Devuelve un record `(confirmed, stage)` para distinguir cancelar de "sin especificar".
+  Future<(bool, String?)> _askStageForDisease(
+      String diseaseName, String? initialStage) async {
+    var picked = DiseaseStage.parse(initialStage)?.label;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('Estadio de la enfermedad'),
+          contentPadding: const EdgeInsets.only(top: 12, bottom: 8),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  '¿En qué estadio se encuentra «$diseaseName»? '
+                  'Adaptaremos los ejercicios y clases a tu situación.',
+                  style: Theme.of(ctx).textTheme.bodyMedium,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final s in DiseaseStage.values)
+                RadioListTile<String?>(
+                  title: Text(s.label),
+                  value: s.label,
+                  groupValue: picked,
+                  onChanged: (v) => setDialog(() => picked = v),
+                ),
+              RadioListTile<String?>(
+                title: const Text('Sin especificar (todos)'),
+                value: null,
+                groupValue: picked,
+                onChanged: (v) => setDialog(() => picked = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirmar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return (confirmed == true, picked);
+  }
+
   void _showDisease(Disease d, int nEx, int nWo, bool isSel) {
     final t = Theme.of(context).textTheme;
     final c = Theme.of(context).colorScheme;
-    _sheet(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(d.name,
-          style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 10),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        if (d.category != null)
-          InfoChip(label: d.category!, icon: Icons.label_outline),
-        InfoChip(label: '$nEx ejercicios', icon: Icons.fitness_center),
-        InfoChip(label: '$nWo clases', icon: Icons.class_outlined),
+    final stage = ref.read(selectedDiseaseStageProvider);
+    final stageLabel = DiseaseStage.parse(stage)?.label;
+    final desc = d.description.isNotEmpty ? d.description : d.shortDescription;
+    final maxDescHeight = MediaQuery.sizeOf(context).height * 0.35;
+
+    _sheet(
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(d.name,
+            style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          if (d.category != null)
+            InfoChip(label: d.category!, icon: Icons.label_outline),
+          InfoChip(label: '$nEx ejercicios', icon: Icons.fitness_center),
+          InfoChip(label: '$nWo clases', icon: Icons.class_outlined),
+          if (isSel && stageLabel != null)
+            InfoChip(label: stageLabel, icon: Icons.timeline_rounded),
+        ]),
+        const SizedBox(height: 16),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxDescHeight),
+          child: Scrollbar(
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                desc,
+                style: t.bodyLarge?.copyWith(color: c.onSurfaceVariant),
+              ),
+            ),
+          ),
+        ),
       ]),
-      const SizedBox(height: 16),
-      Text(d.description.isNotEmpty ? d.description : d.shortDescription,
-          style: t.bodyLarge?.copyWith(color: c.onSurfaceVariant)),
-      const SizedBox(height: 24),
-      FilledButton(
-        onPressed: isSel
-            ? null
-            : () {
-                ref.read(selectedDiseaseIdProvider.notifier).select(d.id);
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton(
+            onPressed: isSel
+                ? null
+                : () async {
+                    final (ok, chosenStage) =
+                        await _askStageForDisease(d.name, null);
+                    if (!ok || !mounted) return;
+                    ref.read(selectedDiseaseIdProvider.notifier).select(d.id);
+                    ref
+                        .read(selectedDiseaseStageProvider.notifier)
+                        .select(chosenStage);
+                    Navigator.of(context).pop();
+                    final msg = chosenStage == null
+                        ? 'Ahora entrenas para: ${d.name}'
+                        : 'Ahora entrenas para: ${d.name} ($chosenStage)';
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text(msg)));
+                  },
+            child: Text(isSel ? 'Condición seleccionada' : 'Usar esta condición'),
+          ),
+          if (isSel) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final (ok, chosenStage) =
+                    await _askStageForDisease(d.name, stage);
+                if (!ok || !mounted) return;
+                ref
+                    .read(selectedDiseaseStageProvider.notifier)
+                    .select(chosenStage);
                 Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ahora entrenas para: ${d.name}')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(chosenStage == null
+                      ? 'Estadio eliminado (todos los estadios)'
+                      : 'Estadio actualizado: $chosenStage'),
+                ));
               },
-        child: Text(isSel ? 'Condición seleccionada' : 'Usar esta condición'),
+              icon: const Icon(Icons.timeline_rounded),
+              label: const Text('Cambiar estadio'),
+            ),
+          ],
+        ],
       ),
-    ]));
+    );
   }
 
   // ───────────── Ejercicios ─────────────
   Widget _exercisesTab() {
     final sel = ref.watch(selectedDiseaseIdProvider);
+    final stage = ref.watch(selectedDiseaseStageProvider);
     return Column(children: [
-      _filterRow(sel),
+      _filterRow(sel, stage),
       Expanded(
         child: AsyncView(
           value: ref.watch(exercisesProvider),
           builder: (list) {
             final items = list
                 .where((e) => _match(e.name) || _match(e.description))
-                .where((e) =>
-                    !_onlyMine || matchesCondition(e.diseaseIds, sel))
+                .where((e) => _exerciseMatchesFilter(e, sel, stage))
                 .toList();
             if (items.isEmpty) {
               return const _Empty(
@@ -243,6 +362,11 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                     if (e.videoId != null)
                       const InfoChip(
                           label: 'Vídeo', icon: Icons.play_circle_outline),
+                    if (stage != null || e.recommendedStage != null)
+                      InfoChip(
+                          label:
+                              'Estadio: ${DiseaseStage.parse(e.recommendedStage)?.label ?? "Todos"}',
+                          icon: Icons.timeline_rounded),
                   ],
                   onTap: () => _showExercise(e),
                 );
@@ -322,17 +446,21 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   // ───────────── Clases ─────────────
   Widget _workoutsTab() {
     final sel = ref.watch(selectedDiseaseIdProvider);
+    final stage = ref.watch(selectedDiseaseStageProvider);
     final downloaded = ref.watch(offlineLibraryProvider).all();
+    final exercises = ref.watch(exercisesProvider).valueOrNull ?? const <Exercise>[];
+    final byId = {
+      for (final e in exercises) e.id: e
+    };
     return Column(children: [
-      _filterRow(sel),
+      _filterRow(sel, stage),
       Expanded(
         child: AsyncView(
           value: ref.watch(workoutsProvider),
           builder: (list) {
             final items = list
                 .where((w) => _match(w.name) || _match(w.description))
-                .where((w) =>
-                    !_onlyMine || matchesCondition(w.diseaseIds, sel))
+                .where((w) => _workoutMatchesFilter(w, sel, stage, byId))
                 .toList();
             if (items.isEmpty) {
               return const _Empty(
@@ -366,8 +494,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                           label: 'Descargada',
                           icon: Icons.download_done_rounded,
                           color: context.appColors.success),
+                    if (stage != null || w.recommendedStage != null)
+                      InfoChip(
+                          label: 'Estadio: ${_workoutStageLabel(w, stage, byId)}',
+                          icon: Icons.timeline_rounded),
                   ],
-                  onTap: () => _showWorkout(w),
+                  onTap: () => _showWorkout(w, byId),
                 );
               },
             );
@@ -377,183 +509,69 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     ]);
   }
 
-  void _showWorkout(Workout w) {
-    final t = Theme.of(context).textTheme;
-    final c = Theme.of(context).colorScheme;
-    final warn = context.appColors.warning;
-    final byId = {
-      for (final e
-          in ref.read(exercisesProvider).valueOrNull ?? const <Exercise>[])
-        e.id: e
-    };
+  bool _stageCompatible(String? contentStage, String? selectedStage) =>
+      matchesStage(contentStage, selectedStage);
 
-    _sheet(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // ── Cabecera de la clase ──
-      Text(w.name,
-          style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 10),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        if (w.durationSeconds > 0)
-          InfoChip(
-              label: formatMinutes(w.durationSeconds),
-              icon: Icons.timer_outlined),
-        InfoChip(
-            label: difficultyLabel(w.difficulty),
-            icon: Icons.bar_chart_rounded),
-        InfoChip(
-            label: '${w.items.length} ejercicios', icon: Icons.fitness_center),
-      ]),
-      if (w.videoId != null) ...[
-        const SizedBox(height: 16),
-        _VideoSection(videoId: w.videoId!),
-      ],
-      if (w.description.isNotEmpty) ...[
-        const SizedBox(height: 14),
-        Text(w.description,
-            style: t.bodyLarge?.copyWith(color: c.onSurfaceVariant)),
-      ],
+  bool _exerciseMatchesFilter(Exercise e, String? selected, String? selectedStage) {
+    if (selected == null || selected == kGeneralTrainingId) return true;
+    if (_onlyMine && !e.diseaseIds.contains(selected)) return false;
+    if (_onlyMyStage && !_stageCompatible(e.recommendedStage, selectedStage)) {
+      return false;
+    }
+    return true;
+  }
 
-      // ── Lista de ejercicios (colapsables) ──
-      const SizedBox(height: 24),
-      Text('Ejercicios de la clase',
-          style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 8),
+  // Verifica si una clase coincide con la condición y/o el estadio seleccionados.
+  bool _workoutMatchesFilter(
+      Workout w, String? selected, String? selectedStage, Map<String, Exercise> byId) {
+    if (selected == null || selected == kGeneralTrainingId) return true;
+    if (_onlyMine && !w.diseaseIds.contains(selected)) return false;
+    if (!_onlyMyStage || selectedStage == null) return true;
 
-      for (var i = 0; i < w.items.length; i++) ...[
-        Builder(builder: (_) {
-          final item = w.items[i];
-          final e = byId[item.exerciseId];
+    // Si la clase define su propio estadio recomendado, usar ese.
+    if (w.recommendedStage != null) {
+      return _stageCompatible(w.recommendedStage, selectedStage);
+    }
 
-          if (e == null) {
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                radius: 16,
-                backgroundColor: c.primaryContainer,
-                foregroundColor: c.onPrimaryContainer,
-                child: Text('${i + 1}',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-              ),
-              title: const Text('Ejercicio'),
-              subtitle: Text([
-                if (item.seconds != null) formatMinutes(item.seconds!),
-                if (item.reps != null) '${item.reps} repeticiones',
-              ].join(' · ')),
-            );
-          }
+    // Si no define estadio propio, revisar los estadios de sus ejercicios.
+    if (w.items.isEmpty) return true;
+    for (final item in w.items) {
+      final e = byId[item.exerciseId];
+      if (e == null) continue;
+      if (_stageCompatible(e.recommendedStage, selectedStage)) return true;
+    }
+    return false;
+  }
 
-          return Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            clipBehavior: Clip.antiAlias,
-            child: ExpansionTile(
-              tilePadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              leading: CircleAvatar(
-                radius: 16,
-                backgroundColor: c.primaryContainer,
-                foregroundColor: c.onPrimaryContainer,
-                child: Text('${i + 1}',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-              ),
-              title: Text(e.name,
-                  style: t.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
-              subtitle: Text([
-                if (item.seconds != null) formatMinutes(item.seconds!),
-                if (item.reps != null) '${item.reps} repeticiones',
-                if (item.seconds == null && e.durationSeconds > 0)
-                  formatMinutes(e.durationSeconds),
-                difficultyLabel(e.difficulty),
-              ].where((s) => s.isNotEmpty).join(' · ')),
-              children: [
-                // Chips de equipo
-                if (e.equipment.isNotEmpty) ...[
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final eq in e.equipment)
-                        InfoChip(label: eq, icon: Icons.sports_gymnastics),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                ],
+  String _workoutStageLabel(Workout w, String? stage, Map<String, Exercise> byId) {
+    final direct = DiseaseStage.parse(w.recommendedStage);
+    if (direct != null) return direct.label;
 
-                // Vídeo
-                if (e.videoId != null) ...[
-                  _VideoSection(videoId: e.videoId!, maxHeight: 200),
-                  const SizedBox(height: 12),
-                ],
+    final stages = <String>{};
+    for (final item in w.items) {
+      final e = byId[item.exerciseId];
+      final parsed = DiseaseStage.parse(e?.recommendedStage);
+      if (parsed != null) {
+        stages.add(parsed.label);
+      }
+    }
 
-                // Descripción
-                if (e.description.isNotEmpty) ...[
-                  Text(e.description,
-                      style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
-                  const SizedBox(height: 8),
-                ],
+    if (stages.isEmpty) return 'Todos';
+    if (stages.length == 1) return stages.first;
+    return 'Mixto';
+  }
 
-                _Bullets(title: 'Beneficios', items: e.benefits, top: 8),
-                _Bullets(
-                    title: 'Instrucciones',
-                    items: e.instructions,
-                    numbered: true,
-                    top: 8),
-
-                if (e.precautions.isNotEmpty || e.contraindications.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: warn.withAlpha(30),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: warn.withAlpha(120)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Icon(Icons.warning_amber_rounded,
-                              color: warn, size: 20),
-                          const SizedBox(width: 8),
-                          Text('Seguridad',
-                              style: t.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w800)),
-                        ]),
-                        _Bullets(
-                            title: 'Precauciones',
-                            items: e.precautions,
-                            top: 8),
-                        _Bullets(
-                            title: 'Contraindicaciones',
-                            items: e.contraindications,
-                            top: 8),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ],
-
-      const SizedBox(height: 24),
-      Text(
-        'Información orientativa. Consulta con tu profesional sanitario antes de empezar.',
-        style: t.bodySmall?.copyWith(color: c.onSurfaceVariant),
-      ),
-      // const SizedBox(height: 16),
-      // FilledButton.icon(
-      //   onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-      //       const SnackBar(
-      //           content: Text('Descargas y reproductor: siguientes fases.'))),
-      //   icon: const Icon(Icons.download_rounded),
-      //   label: const Text('Descargar para usar sin conexión'),
-      // ),
-    ]));
+  // ───────────── Método para mostrar detalles de la workout ─────────────
+  void _showWorkout(Workout w, Map<String, Exercise> byId) {
+    // Navegar o mostrar el detalle de la workout
+    // Por ahora, solo mostramos un SnackBar con el nombre
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Clase: ${w.name}')),
+    );
   }
 
   // ───────────── Utilidades ─────────────
-  Widget _filterRow(String? sel) {
+  Widget _filterRow(String? sel, String? stage) {
     if (sel == null) return const SizedBox.shrink();
     // Con entrenamiento general no hay condición que filtrar.
     if (sel == kGeneralTrainingId) {
@@ -575,20 +593,33 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             .firstOrNull
             ?.name ??
         'mi condición';
+    final stageLabel = DiseaseStage.parse(stage)?.label;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: FilterChip(
-          label: Text('Solo para $name'),
-          selected: _onlyMine,
-          onSelected: (v) => setState(() => _onlyMine = v),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilterChip(
+              label: Text('Solo para $name'),
+              selected: _onlyMine,
+              onSelected: (v) => setState(() => _onlyMine = v),
+            ),
+            if (stageLabel != null)
+              FilterChip(
+                label: Text('Solo para mi estadio ($stageLabel)'),
+                selected: _onlyMyStage,
+                onSelected: (v) => setState(() => _onlyMyStage = v),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  void _sheet(Widget child) {
+  void _sheet(Widget child, {Widget? footer}) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -601,10 +632,30 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           maxChildSize: 0.95, // nunca más del 95 %
           expand: false,
           builder: (context, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController, // ← importante: el mismo controller
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: child,
+            if (footer == null) {
+              return SingleChildScrollView(
+                controller: scrollController, // ← importante: el mismo controller
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: child,
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Flexible(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                    child: child,
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                  child: footer,
+                ),
+              ],
             );
           },
         );
@@ -702,8 +753,8 @@ class _Thumb extends StatelessWidget {
 }
 
 class _Bullets extends StatelessWidget {
-  const _Bullets(
-      {required this.title,
+  const _Bullets({
+      required this.title,
       required this.items,
       this.numbered = false,
       this.top = 20});
@@ -725,14 +776,17 @@ class _Bullets extends StatelessWidget {
         for (var i = 0; i < items.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SizedBox(
-                  width: 22,
-                  child: Text(numbered ? '${i + 1}.' : '•',
-                      style: TextStyle(
-                          color: c.primary, fontWeight: FontWeight.w800))),
-              Expanded(child: Text(items[i], style: t.bodyMedium)),
-            ]),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                    width: 22,
+                    child: Text(numbered ? '${i + 1}.' : '•',
+                        style: TextStyle(
+                            color: c.primary, fontWeight: FontWeight.w800))),
+                Expanded(child: Text(items[i], style: t.bodyMedium)),
+              ],
+            ),
           ),
       ]),
     );
@@ -764,7 +818,7 @@ class _Empty extends StatelessWidget {
 class _VideoSection extends ConsumerWidget {
   const _VideoSection({
     required this.videoId,
-    this.maxHeight = 220, // ← nuevo
+    this.maxHeight = 220,
   });
   final String videoId;
   final double maxHeight;
@@ -792,7 +846,7 @@ class _VideoSection extends ConsumerWidget {
           child: AppVideoPlayer(
             key: ValueKey(video.downloadUrl),
             url: video.downloadUrl,
-            forceAspectRatio: 16 / 9, // ← nuevo parámetro
+            forceAspectRatio: 16 / 9,
           ),
         ),
       ),

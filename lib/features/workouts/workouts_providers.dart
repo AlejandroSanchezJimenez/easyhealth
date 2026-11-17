@@ -58,15 +58,30 @@ final dailyPickProvider =
   }
 
   final exercisesById = {for (final e in exercises) e.id: e};
+  final selectedStage = ref.watch(selectedDiseaseStageProvider);
+  final filterByStage =
+      diseaseId != kGeneralTrainingId && selectedStage != null;
 
   // Solo clases de la condición elegida (o de todas, con entrenamiento
   // general). Cada una necesita vídeo propio o, si no tiene, al menos un
   // ejercicio con vídeo: sin vídeo no hay forma de completarla.
   final candidates = <String, DailyPick>{};
   for (final w in workouts) {
-    if (!matchesCondition(w.diseaseIds, diseaseId)) continue;
+    if (!matchesCondition(w.diseaseIds, diseaseId, selectedStage, w.recommendedStage)) {
+      continue;
+    }
 
     if (w.videoId != null) {
+      // Si la clase tiene vídeo propio pero no declara estadio, comprobar que
+      // ninguno de sus ejercicios pertenezca a otro estadio distinto al del usuario.
+      if (filterByStage && w.recommendedStage == null) {
+        final hasIncompatibleExercise = w.items.any((item) {
+          final e = exercisesById[item.exerciseId];
+          return e != null && !matchesStage(e.recommendedStage, selectedStage);
+        });
+        if (hasIncompatibleExercise) continue;
+      }
+
       candidates['workout:${w.id}'] = DailyPick(
         kind: 'workout',
         id: w.id,
@@ -80,13 +95,16 @@ final dailyPickProvider =
     }
 
     // Sin vídeo propio: se encadenan los de sus ejercicios, respetando el orden
-    // de la clase. Los ejercicios sin vídeo o inexistentes se omiten.
+    // de la clase. Los ejercicios sin vídeo, inexistentes o de otro estadio se omiten.
     final videoIds = <String>[];
     final partNames = <String>[];
     var sumSeconds = 0;
     for (final item in w.items) {
       final e = exercisesById[item.exerciseId];
       if (e == null || e.videoId == null) continue;
+      if (filterByStage && !matchesStage(e.recommendedStage, selectedStage)) {
+        continue;
+      }
       videoIds.add(e.videoId!);
       partNames.add(e.name);
       sumSeconds += e.durationSeconds;

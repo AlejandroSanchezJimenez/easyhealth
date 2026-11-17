@@ -26,6 +26,7 @@ class Workout implements ContentEntity {
     this.videoId,
     this.items = const [], // el orden de la lista ES el orden de la clase
     this.diseaseIds = const [],
+    this.recommendedStage,
     this.status = ContentStatus.draft,
     this.version = 1,
     this.updatedAt,
@@ -38,6 +39,7 @@ class Workout implements ContentEntity {
   final String? thumbnailUrl, videoId;
   final List<WorkoutItem> items;
   final List<String> diseaseIds;
+  final String? recommendedStage;
   @override
   final ContentStatus status;
   @override
@@ -58,6 +60,7 @@ class Workout implements ContentEntity {
             .map((e) => WorkoutItem.fromMap(Map<String, dynamic>.from(e as Map)))
             .toList(),
         diseaseIds: readStrings(m['diseaseIds']),
+        recommendedStage: m['recommendedStage'] as String?,
         status: ContentStatus.parse(m['status'] as String?),
         version: (m['version'] as num?)?.toInt() ?? 1,
         updatedAt: readDate(m['updatedAt']),
@@ -73,6 +76,7 @@ class Workout implements ContentEntity {
         'items': items.map((e) => e.toMap()).toList(),
         'exerciseIds': exerciseIds, // redundante: permite consultas array-contains
         'diseaseIds': diseaseIds,
+        'recommendedStage': recommendedStage,
         'status': status.name,
       };
 }

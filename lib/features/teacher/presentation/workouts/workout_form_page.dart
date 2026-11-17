@@ -11,6 +11,7 @@ import '../../../../shared/models/content_status.dart';
 import '../../../../shared/widgets/async_view.dart';
 import '../../../auth/auth_providers.dart';
 import '../../../diseases/diseases_providers.dart';
+import '../../../diseases/selected_disease_provider.dart';
 import '../../../exercises/exercises_providers.dart';
 import '../../../videos/domain/video_meta.dart';
 import '../../../videos/videos_providers.dart';
@@ -34,6 +35,7 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
   final Set<String> _diseaseIds = {};
   final List<WorkoutItem> _items = [];
 
+  String? _recommendedStage;
   String? _videoId;
   String? _videoLabel;
   File? _pendingVideo;
@@ -75,6 +77,7 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
       _items
         ..clear()
         ..addAll(w.items);
+      _recommendedStage = DiseaseStage.parse(w.recommendedStage)?.label;
       _videoId = w.videoId;
       _videoLabel = videoLabel;
     });
@@ -297,6 +300,7 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
               videoId: videoId,
               items: List.of(_items),
               diseaseIds: _diseaseIds.toList(),
+              recommendedStage: _recommendedStage,
               status: _existing?.status ?? ContentStatus.draft,
             ),
             id: _existing?.id,
@@ -364,6 +368,26 @@ class _WorkoutFormPageState extends ConsumerState<WorkoutFormPage> {
               ),
             ),
           ]),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String?>(
+            value: _recommendedStage,
+            decoration: const InputDecoration(
+              labelText: 'Estadio recomendado (opcional)',
+              helperText: 'Si no eliges ninguno, servirá para todos los estadios.',
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Todos los estadios'),
+              ),
+              for (final stage in DiseaseStage.values)
+                DropdownMenuItem<String?>(
+                  value: stage.label,
+                  child: Text(stage.label),
+                ),
+            ],
+            onChanged: _busy ? null : (v) => setState(() => _recommendedStage = v),
+          ),
 
           // ── Enfermedades ──
           const SizedBox(height: 24),
