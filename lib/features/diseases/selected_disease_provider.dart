@@ -21,7 +21,8 @@ const String kGeneralTrainingProfileLabel = 'Entrenamiento personal';
 enum DiseaseStage {
   leve('Estadio I · Leve', 1),
   moderado('Estadio II · Moderado', 2),
-  avanzado('Estadio III · Avanzado', 3);
+  avanzado('Estadio III · Avanzado', 3),
+  severo('Estadio IV · Severo', 4);
 
   final String label;
   final int level;
@@ -37,6 +38,7 @@ enum DiseaseStage {
       'principiante' || 'leve' || 'estadio 1' || 'estadio i' => leve,
       'intermedio' || 'moderado' || 'estadio 2' || 'estadio ii' => moderado,
       'avanzado' || 'estadio 3' || 'estadio iii' => avanzado,
+      'severo' || 'estadio 4' || 'estadio iv' => severo,
       _ => null,
     };
   }
